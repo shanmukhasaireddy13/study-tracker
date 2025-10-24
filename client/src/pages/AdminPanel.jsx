@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useState, useMemo } from 'react'
 import { AppContent } from '../context/AppContexts'
 import axios from 'axios'
 import { toast } from 'react-toastify'
+import AdminProgressDashboard from '../components/AdminProgressDashboard'
 
 const AdminPanel = () => {
   const { backendUrl, userData } = useContext(AppContent)
@@ -13,6 +14,7 @@ const AdminPanel = () => {
   const [systemAnalytics, setSystemAnalytics] = useState(null)
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [studentDetails, setStudentDetails] = useState(null)
+  const [viewingStudentProgress, setViewingStudentProgress] = useState(false)
   const [subjects, setSubjects] = useState([])
   const [lessons, setLessons] = useState([])
   const [stats, setStats] = useState(null)
@@ -71,6 +73,16 @@ const AdminPanel = () => {
     } finally {
       setLoading(false)
     }
+  }
+
+  const viewStudentProgress = (student) => {
+    setSelectedStudent(student)
+    setViewingStudentProgress(true)
+  }
+
+  const backToStudents = () => {
+    setViewingStudentProgress(false)
+    setSelectedStudent(null)
   }
 
   const loadStudentPerformance = async () => {
@@ -388,6 +400,16 @@ const AdminPanel = () => {
           </div>
         </div>
 
+        {/* Student Progress Dashboard */}
+        {viewingStudentProgress && selectedStudent && (
+          <div className='mb-8'>
+            <AdminProgressDashboard 
+              selectedStudent={selectedStudent} 
+              onBack={backToStudents}
+            />
+          </div>
+        )}
+
         {/* System Overview Stats */}
         {systemAnalytics && (
           <div className='grid grid-cols-1 md:grid-cols-4 gap-6 mb-8'>
@@ -683,7 +705,7 @@ const AdminPanel = () => {
                         )}
                       </div>
                       
-                      <div className='ml-6'>
+                      <div className='ml-6 flex space-x-2'>
                         <button
                           onClick={() => {
                             setSelectedStudent(student)
@@ -692,6 +714,12 @@ const AdminPanel = () => {
                           className='px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium'
                         >
                           View Details
+                        </button>
+                        <button
+                          onClick={() => viewStudentProgress(student.student)}
+                          className='px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium'
+                        >
+                          View Progress
                         </button>
                       </div>
                     </div>

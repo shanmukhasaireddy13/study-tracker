@@ -3,6 +3,7 @@ import progressModel from '../models/progressModel.js';
 import studyEntryModel from '../models/studyEntryModel.js';
 import subjectModel from '../models/subjectModel.js';
 import lessonModel from '../models/lessonModel.js';
+import { getIndianTime, getIndianDateString, getIndianDateStartOfDay, formatIndianDateTime } from '../utils/timezone.js';
 
 // Get user's streak data
 export const getStreakData = async (req, res) => {
@@ -65,10 +66,9 @@ export const updateStreak = async (req, res) => {
         const userId = req.user.id;
         const { studyEntry } = req.body;
 
-        // Check if streak needs to be updated for today
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const dateStr = today.toISOString().split('T')[0];
+        // Check if streak needs to be updated for today (Indian time)
+        const todayIST = getIndianDateStartOfDay();
+        const dateStr = getIndianDateString();
         
         const streak = await streakModel.findOne({ user: userId });
         if (!streak) {
@@ -76,7 +76,7 @@ export const updateStreak = async (req, res) => {
         } else {
             // Check if we already have a calendar entry for today
             const existingCalendarEntry = streak.studyCalendar.find(entry => 
-                entry.date.toISOString().split('T')[0] === dateStr
+                getIndianDateString(entry.date) === dateStr
             );
             
             // Only recalculate streak if this is the first entry for today
@@ -156,12 +156,11 @@ export const getRevisionPlan = async (req, res) => {
 
 // Calculate current streak
 export const calculateStreak = async (userId) => {
-    const now = new Date();
-    const today = new Date(now);
-    today.setHours(0, 0, 0, 0);
+    const nowIST = getIndianTime();
+    const todayIST = getIndianDateStartOfDay();
     
-    // Consider it "early in the day" if it's before 6 PM
-    const isEarlyInDay = now.getHours() < 18;
+    // Consider it "early in the day" if it's before 6 PM IST
+    const isEarlyInDay = nowIST.getHours() < 18;
     
     let streak = await streakModel.findOne({ user: userId });
     if (!streak) {
@@ -179,18 +178,17 @@ export const calculateStreak = async (userId) => {
     }
 
     // Get study entries for the last 30 days
-    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(todayIST.getTime() - 30 * 24 * 60 * 60 * 1000);
     const studyEntries = await studyEntryModel.find({
         student: userId,
         createdAt: { $gte: thirtyDaysAgo }
     }).sort({ createdAt: -1 });
 
-    // Group by date
+    // Group by date (Indian time)
     const studyByDate = {};
     studyEntries.forEach(entry => {
-        const date = new Date(entry.createdAt);
-        date.setHours(0, 0, 0, 0);
-        const dateStr = date.toISOString().split('T')[0];
+        const dateIST = getIndianDateStartOfDay(entry.createdAt);
+        const dateStr = getIndianDateString(dateIST);
         
         if (!studyByDate[dateStr]) {
             studyByDate[dateStr] = [];
@@ -200,17 +198,17 @@ export const calculateStreak = async (userId) => {
 
     // Calculate current streak - FIXED LOGIC
     let currentStreak = 0;
-    let checkDate = new Date(today);
+    let checkDate = new Date(todayIST);
     
-    const todayStr = checkDate.toISOString().split('T')[0];
-    const yesterday = new Date(today);
+    const todayStr = getIndianDateString(todayIST);
+    const yesterday = new Date(todayIST);
     yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayStr = getIndianDateString(yesterday);
     
     // Check if there's a study entry today
     if (studyByDate[todayStr]) {
         // Start counting from today
-        checkDate = new Date(today);
+        checkDate = new Date(todayIST);
     } 
     // If no entry today, check yesterday
     else if (studyByDate[yesterdayStr]) {
@@ -223,7 +221,7 @@ export const calculateStreak = async (userId) => {
         const recentDates = Object.keys(studyByDate).sort().reverse();
         if (recentDates.length > 0) {
             const lastStudyDate = new Date(recentDates[0]);
-            const daysSinceLastStudy = Math.floor((today.getTime() - lastStudyDate.getTime()) / (1000 * 60 * 60 * 24));
+            const daysSinceLastStudy = Math.floor((todayIST.getTime() - lastStudyDate.getTime()) / (1000 * 60 * 60 * 24));
             
             // If more than 1 day gap, reset streak to 0
             if (daysSinceLastStudy > 1) {
@@ -241,7 +239,7 @@ export const calculateStreak = async (userId) => {
     // Count consecutive days backwards from checkDate
     if (checkDate && currentStreak === 0) {
         while (true) {
-            const dateStr = checkDate.toISOString().split('T')[0];
+            const dateStr = getIndianDateString(checkDate);
             
             if (studyByDate[dateStr]) {
                 // There's a study entry on this date
@@ -264,21 +262,22 @@ export const calculateStreak = async (userId) => {
         totalStudyDays: Object.keys(studyByDate).length
     });
 
+    // Rebuild study calendar to ensure it's accurate
+    await rebuildStudyCalendar(userId);
 };
 
 // Update study calendar
 const updateStudyCalendar = async (userId, studyEntry) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayIST = getIndianDateStartOfDay();
     
     const streak = await streakModel.findOne({ user: userId });
     if (!streak) return;
 
-    const dateStr = today.toISOString().split('T')[0];
+    const dateStr = getIndianDateString(todayIST);
     
     // Check if we already have an entry for today
     const existingEntry = streak.studyCalendar.find(entry => 
-        entry.date.toISOString().split('T')[0] === dateStr
+        getIndianDateString(entry.date) === dateStr
     );
 
     if (existingEntry) {
@@ -294,7 +293,7 @@ const updateStudyCalendar = async (userId, studyEntry) => {
     } else {
         // Create new entry
         streak.studyCalendar.push({
-            date: today,
+            date: todayIST,
             subjectsStudied: [studyEntry.subject],
             lessonsStudied: studyEntry.lesson ? [studyEntry.lesson] : [],
             totalTime: studyEntry.totalTime || 0,
@@ -303,6 +302,60 @@ const updateStudyCalendar = async (userId, studyEntry) => {
     }
 
     await streak.save();
+};
+
+// Rebuild study calendar from existing study entries (for fixing historical data)
+export const rebuildStudyCalendar = async (userId) => {
+    try {
+        const streak = await streakModel.findOne({ user: userId });
+        if (!streak) return;
+
+        // Get all study entries for this user
+        const studyEntries = await studyEntryModel.find({ student: userId }).sort({ createdAt: -1 });
+        
+        // Clear existing calendar
+        streak.studyCalendar = [];
+        
+        // Group entries by Indian date
+        const entriesByDate = {};
+        studyEntries.forEach(entry => {
+            const entryDateIST = getIndianDateStartOfDay(entry.createdAt);
+            const dateStr = getIndianDateString(entryDateIST);
+            
+            if (!entriesByDate[dateStr]) {
+                entriesByDate[dateStr] = [];
+            }
+            entriesByDate[dateStr].push(entry);
+        });
+        
+        // Create calendar entries for each date
+        Object.keys(entriesByDate).forEach(dateStr => {
+            const entries = entriesByDate[dateStr];
+            const firstEntry = entries[0];
+            const entryDateIST = getIndianDateStartOfDay(firstEntry.createdAt);
+            
+            const subjectsStudied = [...new Set(entries.map(e => e.subject))];
+            const lessonsStudied = [...new Set(entries.filter(e => e.lesson).map(e => e.lesson))];
+            const totalTime = entries.reduce((sum, e) => sum + (e.totalTime || 0), 0);
+            const maxConfidence = Math.max(...entries.map(e => e.confidence || 0));
+            
+            streak.studyCalendar.push({
+                date: entryDateIST,
+                subjectsStudied,
+                lessonsStudied,
+                totalTime,
+                confidence: maxConfidence
+            });
+        });
+        
+        // Sort calendar by date (newest first)
+        streak.studyCalendar.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        await streak.save();
+        console.log(`Rebuilt study calendar for user ${userId} with ${streak.studyCalendar.length} entries`);
+    } catch (error) {
+        console.error('Error rebuilding study calendar:', error);
+    }
 };
 
 // Update progress for subjects and lessons
@@ -315,9 +368,9 @@ const updateProgress = async (userId, studyEntry) => {
         lesson: studyEntry.lesson
     });
 
-    const today = new Date();
+    const todayIST = getIndianTime();
     const revisionEntry = {
-        date: today,
+        date: todayIST,
         confidence: studyEntry.confidence || 3,
         timeSpent: studyEntry.totalTime || 0,
         notes: studyEntry.reading?.notes || ''

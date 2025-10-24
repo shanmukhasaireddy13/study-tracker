@@ -5,8 +5,9 @@ import {
     getStudyEntries, 
     getStudyEntry, 
     updateStudyEntry, 
-    deleteStudyEntry,
-    getStudyStats 
+    deleteStudyEntry, 
+    getStudyStats,
+    getStudyStatsForAdmin
 } from '../controllers/studyController.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
@@ -116,6 +117,7 @@ const idParams = { params: z.object({ id: z.string().min(1) }) };
 router.post('/', validate(createEntrySchema), createStudyEntry);
 router.get('/', getStudyEntries);
 router.get('/stats', getStudyStats);
+router.get('/stats/admin', getStudyStatsForAdmin);
 router.get('/:id', validate(idParams), getStudyEntry);
 router.put('/:id', validate(updateEntrySchema), updateStudyEntry);
 router.delete('/:id', validate(idParams), deleteStudyEntry);

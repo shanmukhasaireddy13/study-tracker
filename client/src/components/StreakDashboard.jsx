@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import axios from 'axios'
 import { toast } from 'react-toastify'
+import { formatIndianDate, getIndianDateString, isTodayIndian, isYesterdayIndian } from '../utils/timezone'
 
 const StreakDashboard = ({ backendUrl }) => {
   const [streakData, setStreakData] = useState(null)
@@ -177,20 +178,27 @@ const StreakDashboard = ({ backendUrl }) => {
                     </div>
                   ))}
                   {Array.from({ length: 35 }, (_, i) => {
-                    const today = new Date()
-                    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
+                    const todayIST = new Date()
+                    const firstDay = new Date(todayIST.getFullYear(), todayIST.getMonth(), 1)
                     const startDate = new Date(firstDay)
                     startDate.setDate(startDate.getDate() - firstDay.getDay())
                     const currentDate = new Date(startDate)
                     currentDate.setDate(startDate.getDate() + i)
                     
+                    // Check if this date has study entries (using Indian timezone)
                     const hasStudied = streakData?.studyCalendar?.some(entry => {
-                      const entryDate = new Date(entry.date)
-                      return entryDate.toDateString() === currentDate.toDateString()
+                      const entryDateIST = new Date(entry.date)
+                      const currentDateIST = new Date(currentDate)
+                      
+                      // Compare dates in Indian timezone
+                      const entryDateStr = getIndianDateString(entryDateIST)
+                      const currentDateStr = getIndianDateString(currentDateIST)
+                      
+                      return entryDateStr === currentDateStr
                     }) || false
                     
-                    const isToday = currentDate.toDateString() === today.toDateString()
-                    const isCurrentMonth = currentDate.getMonth() === today.getMonth()
+                    const isToday = isTodayIndian(currentDate)
+                    const isCurrentMonth = currentDate.getMonth() === todayIST.getMonth()
                     
                     return (
                       <div 
@@ -204,7 +212,7 @@ const StreakDashboard = ({ backendUrl }) => {
                             ? 'bg-gray-100 text-gray-600'
                             : 'bg-gray-50 text-gray-400'
                         }`}
-                        title={currentDate.toLocaleDateString() + (hasStudied ? ' (Studied)' : '')}
+                        title={`${formatIndianDate(currentDate)}${hasStudied ? ' (Studied)' : ''}`}
                       >
                         {currentDate.getDate()}
                       </div>

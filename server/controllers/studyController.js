@@ -406,3 +406,75 @@ const updateDailyProgress = async (studentId, subjectId, entry = null) => {
         console.error('Error updating daily progress:', err);
     }
 };
+
+// Get study statistics for admin (specific student)
+export const getStudyStatsForAdmin = async (req, res) => {
+    try {
+        const { studentId } = req.query;
+        const studentIdToUse = studentId || req.user.id;
+        
+        console.log('Getting study stats for student:', studentIdToUse);
+
+        // Get total study time
+        const totalStudyTime = await studyEntryModel.aggregate([
+            { $match: { student: new mongoose.Types.ObjectId(studentIdToUse) } },
+            { $group: { _id: null, totalTime: { $sum: '$totalTime' } } }
+        ]);
+
+        // Get total entries
+        const totalEntries = await studyEntryModel.countDocuments({ 
+            student: new mongoose.Types.ObjectId(studentIdToUse) 
+        });
+
+        // Get average confidence
+        const avgConfidence = await studyEntryModel.aggregate([
+            { $match: { student: new mongoose.Types.ObjectId(studentIdToUse) } },
+            { $group: { _id: null, avgConfidence: { $avg: '$confidence' } } }
+        ]);
+
+        // Get subject-wise breakdown
+        const subjectBreakdown = await studyEntryModel.aggregate([
+            { $match: { student: new mongoose.Types.ObjectId(studentIdToUse) } },
+            {
+                $group: {
+                    _id: '$subject',
+                    totalTime: { $sum: '$totalTime' },
+                    entryCount: { $sum: 1 },
+                    avgConfidence: { $avg: '$confidence' }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'subjects',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'subjectDetails'
+                }
+            },
+            { $unwind: '$subjectDetails' },
+            {
+                $project: {
+                    _id: 0,
+                    subject: '$subjectDetails.name',
+                    icon: '$subjectDetails.icon',
+                    totalTime: 1,
+                    entryCount: 1,
+                    avgConfidence: 1
+                }
+            }
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                totalStudyTime: totalStudyTime[0]?.totalTime || 0,
+                totalEntries,
+                averageConfidence: avgConfidence[0]?.avgConfidence || 0,
+                subjectBreakdown
+            }
+        });
+    } catch (error) {
+        console.error('Get study stats error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
