@@ -1,0 +1,449 @@
+import streakModel from '../models/streakModel.js';
+import progressModel from '../models/progressModel.js';
+import studyEntryModel from '../models/studyEntryModel.js';
+import subjectModel from '../models/subjectModel.js';
+import lessonModel from '../models/lessonModel.js';
+
+// Get user's streak data
+export const getStreakData = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        
+        let streak = await streakModel.findOne({ user: userId });
+        
+        if (!streak) {
+            // Create new streak record
+            streak = await streakModel.create({
+                user: userId,
+                currentStreak: 0,
+                longestStreak: 0,
+                lastStudyDate: null,
+                streakStartDate: null,
+                totalStudyDays: 0,
+                studyCalendar: [],
+                achievements: []
+            });
+        }
+
+        // Always recalculate streak to ensure it's up to date
+        await calculateStreak(userId);
+
+        // Get updated streak data
+        const updatedStreak = await streakModel.findOne({ user: userId });
+        
+        res.json({ success: true, data: updatedStreak });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Refresh streak data (manual trigger)
+export const refreshStreak = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        
+        console.log(`Manual streak refresh requested for user: ${userId}`);
+        
+        // Recalculate streak
+        await calculateStreak(userId);
+        
+        // Get updated streak data
+        const updatedStreak = await streakModel.findOne({ user: userId });
+        
+        console.log(`Refreshed streak data:`, updatedStreak);
+        
+        res.json({ success: true, data: updatedStreak, message: 'Streak refreshed successfully' });
+    } catch (error) {
+        console.error('Refresh streak error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Update streak when study entry is created
+export const updateStreak = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { studyEntry } = req.body;
+
+        await calculateStreak(userId);
+        await updateStudyCalendar(userId, studyEntry);
+        await updateProgress(userId, studyEntry);
+        await checkAchievements(userId);
+
+        res.json({ success: true, message: 'Streak updated successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Get revision recommendations
+export const getRevisionPlan = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const today = new Date();
+        
+        // Get all progress records that need review
+        const dueForReview = await progressModel.find({
+            user: userId,
+            nextReviewDate: { $lte: today }
+        }).populate('subject lesson').sort({ nextReviewDate: 1 });
+
+        // Get subjects not studied recently (more than 3 days)
+        const threeDaysAgo = new Date(today.getTime() - 3 * 24 * 60 * 60 * 1000);
+        const staleSubjects = await progressModel.find({
+            user: userId,
+            lastStudied: { $lt: threeDaysAgo }
+        }).populate('subject').distinct('subject');
+
+        // Get weak areas (low mastery level)
+        const weakAreas = await progressModel.find({
+            user: userId,
+            masteryLevel: { $lt: 3 }
+        }).populate('subject lesson').sort({ masteryLevel: 1, lastStudied: 1 });
+
+        // Get all subjects for overview
+        const allSubjects = await subjectModel.find().sort({ name: 1 });
+        const subjectProgress = await Promise.all(allSubjects.map(async (subject) => {
+            const progress = await progressModel.find({ user: userId, subject: subject._id });
+            const lastStudied = progress.length > 0 ? 
+                Math.max(...progress.map(p => new Date(p.lastStudied).getTime())) : null;
+            
+            return {
+                subject,
+                lastStudied: lastStudied ? new Date(lastStudied) : null,
+                daysSinceLastStudy: lastStudied ? 
+                    Math.floor((today.getTime() - lastStudied) / (1000 * 60 * 60 * 24)) : null,
+                totalLessons: progress.length,
+                masteredLessons: progress.filter(p => p.masteryLevel >= 4).length,
+                averageConfidence: progress.length > 0 ? 
+                    progress.reduce((sum, p) => sum + p.confidence, 0) / progress.length : 0
+            };
+        }));
+
+        res.json({
+            success: true,
+            data: {
+                dueForReview: dueForReview.slice(0, 10), // Top 10 most urgent
+                staleSubjects: staleSubjects.slice(0, 5), // Top 5 stale subjects
+                weakAreas: weakAreas.slice(0, 10), // Top 10 weak areas
+                subjectProgress,
+                recommendations: generateRecommendations(dueForReview, staleSubjects, weakAreas)
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Calculate current streak
+export const calculateStreak = async (userId) => {
+    const now = new Date();
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+    
+    // Consider it "early in the day" if it's before 6 PM
+    const isEarlyInDay = now.getHours() < 18;
+    
+    let streak = await streakModel.findOne({ user: userId });
+    if (!streak) {
+        // Create new streak record if none exists
+        streak = await streakModel.create({
+            user: userId,
+            currentStreak: 0,
+            longestStreak: 0,
+            lastStudyDate: null,
+            streakStartDate: null,
+            totalStudyDays: 0,
+            studyCalendar: [],
+            achievements: []
+        });
+    }
+
+    // Get study entries for the last 30 days
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const studyEntries = await studyEntryModel.find({
+        student: userId,
+        createdAt: { $gte: thirtyDaysAgo }
+    }).sort({ createdAt: -1 });
+
+    // Group by date
+    const studyByDate = {};
+    studyEntries.forEach(entry => {
+        const date = new Date(entry.createdAt);
+        date.setHours(0, 0, 0, 0);
+        const dateStr = date.toISOString().split('T')[0];
+        
+        if (!studyByDate[dateStr]) {
+            studyByDate[dateStr] = [];
+        }
+        studyByDate[dateStr].push(entry);
+    });
+
+    // Calculate current streak - FIXED LOGIC
+    let currentStreak = 0;
+    let checkDate = new Date(today);
+    
+    // Check if there's a study entry today or yesterday
+    const todayStr = checkDate.toISOString().split('T')[0];
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    
+    // If there's a study entry today, start counting from today
+    if (studyByDate[todayStr]) {
+        checkDate = new Date(today);
+    } 
+    // If no entry today but there's an entry yesterday, start counting from yesterday
+    else if (studyByDate[yesterdayStr]) {
+        checkDate = new Date(yesterday);
+    }
+    // If no entry today or yesterday, check if there's a gap of more than 1 day
+    else {
+        // Find the most recent study entry
+        const recentDates = Object.keys(studyByDate).sort().reverse();
+        if (recentDates.length > 0) {
+            const lastStudyDate = new Date(recentDates[0]);
+            const daysSinceLastStudy = Math.floor((today.getTime() - lastStudyDate.getTime()) / (1000 * 60 * 60 * 24));
+            
+            if (daysSinceLastStudy > 1) {
+                currentStreak = 0;
+            } else {
+                checkDate = lastStudyDate;
+            }
+        } else {
+            currentStreak = 0;
+        }
+    }
+    
+    // If we have a starting point, count consecutive days backwards
+    if (currentStreak === 0 && checkDate) {
+        while (true) {
+            const dateStr = checkDate.toISOString().split('T')[0];
+            
+            if (studyByDate[dateStr]) {
+                // There's a study entry on this date
+                currentStreak++;
+                checkDate.setDate(checkDate.getDate() - 1);
+            } else {
+                // No study entry on this date - streak ends here
+                break;
+            }
+        }
+    }
+
+    // Update streak record
+    const longestStreak = Math.max(streak.longestStreak, currentStreak);
+    
+    await streakModel.findByIdAndUpdate(streak._id, {
+        currentStreak,
+        longestStreak,
+        lastStudyDate: studyEntries.length > 0 ? studyEntries[0].createdAt : null,
+        totalStudyDays: Object.keys(studyByDate).length
+    });
+
+};
+
+// Update study calendar
+const updateStudyCalendar = async (userId, studyEntry) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const streak = await streakModel.findOne({ user: userId });
+    if (!streak) return;
+
+    const dateStr = today.toISOString().split('T')[0];
+    
+    // Check if we already have an entry for today
+    const existingEntry = streak.studyCalendar.find(entry => 
+        entry.date.toISOString().split('T')[0] === dateStr
+    );
+
+    if (existingEntry) {
+        // Update existing entry
+        if (!existingEntry.subjectsStudied.includes(studyEntry.subject)) {
+            existingEntry.subjectsStudied.push(studyEntry.subject);
+        }
+        if (studyEntry.lesson && !existingEntry.lessonsStudied.includes(studyEntry.lesson)) {
+            existingEntry.lessonsStudied.push(studyEntry.lesson);
+        }
+        existingEntry.totalTime += studyEntry.totalTime || 0;
+        existingEntry.confidence = Math.max(existingEntry.confidence, studyEntry.confidence || 0);
+    } else {
+        // Create new entry
+        streak.studyCalendar.push({
+            date: today,
+            subjectsStudied: [studyEntry.subject],
+            lessonsStudied: studyEntry.lesson ? [studyEntry.lesson] : [],
+            totalTime: studyEntry.totalTime || 0,
+            confidence: studyEntry.confidence || 0
+        });
+    }
+
+    await streak.save();
+};
+
+// Update progress for subjects and lessons
+const updateProgress = async (userId, studyEntry) => {
+    if (!studyEntry.lesson) return;
+
+    const existingProgress = await progressModel.findOne({
+        user: userId,
+        subject: studyEntry.subject,
+        lesson: studyEntry.lesson
+    });
+
+    const today = new Date();
+    const revisionEntry = {
+        date: today,
+        confidence: studyEntry.confidence || 3,
+        timeSpent: studyEntry.totalTime || 0,
+        notes: studyEntry.reading?.notes || ''
+    };
+
+    if (existingProgress) {
+        // Update existing progress
+        existingProgress.lastStudied = today;
+        existingProgress.studyCount += 1;
+        existingProgress.totalTimeSpent += studyEntry.totalTime || 0;
+        existingProgress.confidence = studyEntry.confidence || existingProgress.confidence;
+        existingProgress.revisionHistory.push(revisionEntry);
+        
+        // Update mastery level based on study count and confidence
+        if (existingProgress.studyCount >= 5 && existingProgress.confidence >= 4) {
+            existingProgress.masteryLevel = 5; // Mastered
+        } else if (existingProgress.studyCount >= 3 && existingProgress.confidence >= 3) {
+            existingProgress.masteryLevel = 4; // Great
+        } else if (existingProgress.studyCount >= 2) {
+            existingProgress.masteryLevel = 3; // Good
+        } else {
+            existingProgress.masteryLevel = 2; // Learning
+        }
+
+        // Calculate next review date using spaced repetition
+        existingProgress.nextReviewDate = calculateNextReviewDate(existingProgress);
+        
+        await existingProgress.save();
+    } else {
+        // Create new progress record
+        await progressModel.create({
+            user: userId,
+            subject: studyEntry.subject,
+            lesson: studyEntry.lesson,
+            firstStudied: today,
+            lastStudied: today,
+            studyCount: 1,
+            masteryLevel: 1,
+            confidence: studyEntry.confidence || 3,
+            totalTimeSpent: studyEntry.totalTime || 0,
+            revisionHistory: [revisionEntry],
+            nextReviewDate: new Date(today.getTime() + 24 * 60 * 60 * 1000) // Next day
+        });
+    }
+};
+
+// Calculate next review date using spaced repetition (simplified SM-2 algorithm)
+const calculateNextReviewDate = (progress) => {
+    const today = new Date();
+    const confidence = progress.confidence;
+    
+    if (confidence >= 4) {
+        // High confidence - increase interval
+        progress.interval = Math.min(progress.interval * 2, 30); // Max 30 days
+    } else if (confidence >= 3) {
+        // Medium confidence - keep interval
+        progress.interval = Math.max(progress.interval, 1);
+    } else {
+        // Low confidence - reset interval
+        progress.interval = 1;
+    }
+    
+    const nextReview = new Date(today.getTime() + progress.interval * 24 * 60 * 60 * 1000);
+    return nextReview;
+};
+
+// Check and award achievements
+const checkAchievements = async (userId) => {
+    const streak = await streakModel.findOne({ user: userId });
+    if (!streak) return;
+
+    const achievements = [];
+    
+    // Streak achievements
+    if (streak.currentStreak >= 7 && !streak.achievements.find(a => a.type === 'streak_7')) {
+        achievements.push({
+            type: 'streak_7',
+            description: '7 Day Streak! 🔥'
+        });
+    }
+    
+    if (streak.currentStreak >= 30 && !streak.achievements.find(a => a.type === 'streak_30')) {
+        achievements.push({
+            type: 'streak_30',
+            description: '30 Day Streak! 🏆'
+        });
+    }
+    
+    if (streak.totalStudyDays >= 100 && !streak.achievements.find(a => a.type === 'century')) {
+        achievements.push({
+            type: 'century',
+            description: '100 Study Days! 💯'
+        });
+    }
+
+    // Subject mastery achievements
+    const subjectProgress = await progressModel.aggregate([
+        { $match: { user: userId } },
+        { $group: { _id: '$subject', masteredLessons: { $sum: { $cond: [{ $gte: ['$masteryLevel', 4] }, 1, 0] } } } }
+    ]);
+
+    for (const subj of subjectProgress) {
+        if (subj.masteredLessons >= 10 && !streak.achievements.find(a => a.type === `subject_master_${subj._id}`)) {
+            achievements.push({
+                type: `subject_master_${subj._id}`,
+                description: 'Subject Master! 🎓'
+            });
+        }
+    }
+
+    if (achievements.length > 0) {
+        streak.achievements.push(...achievements);
+        await streak.save();
+    }
+};
+
+// Generate smart recommendations
+const generateRecommendations = (dueForReview, staleSubjects, weakAreas) => {
+    const recommendations = [];
+    
+    if (dueForReview.length > 0) {
+        recommendations.push({
+            type: 'urgent',
+            title: 'Due for Review',
+            description: `${dueForReview.length} topics need your attention`,
+            priority: 'high',
+            items: dueForReview.slice(0, 3)
+        });
+    }
+    
+    if (staleSubjects.length > 0) {
+        recommendations.push({
+            type: 'stale',
+            title: 'Stale Subjects',
+            description: 'Haven\'t studied these subjects recently',
+            priority: 'medium',
+            items: staleSubjects.slice(0, 3)
+        });
+    }
+    
+    if (weakAreas.length > 0) {
+        recommendations.push({
+            type: 'weak',
+            title: 'Weak Areas',
+            description: 'Focus on improving these topics',
+            priority: 'medium',
+            items: weakAreas.slice(0, 3)
+        });
+    }
+    
+    return recommendations;
+};

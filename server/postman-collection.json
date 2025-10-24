@@ -1,0 +1,39 @@
+{
+  "info": {
+    "name": "MERN Auth + Google SSO + Notes API",
+    "description": "API collection for Google SSO authentication and personal notes management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        { "name": "Register User", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": { "mode": "raw", "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\"\n}" }, "url": { "raw": "{{baseUrl}}/api/v1/auth/register", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","register"] } } },
+        { "name": "Login User", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": { "mode": "raw", "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\"\n}" }, "url": { "raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","login"] } } },
+        { "name": "Google Login", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": { "mode": "raw", "raw": "{\n  \"idToken\": \"GOOGLE_ID_TOKEN\"\n}" }, "url": { "raw": "{{baseUrl}}/api/v1/auth/google", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","google"] } } },
+        { "name": "Check Auth Status", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/v1/auth/is-auth", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","is-auth"] } } },
+        { "name": "Logout User", "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/api/v1/auth/logout", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","logout"] } } }
+      ]
+    },
+    {
+      "name": "User",
+      "item": [
+        { "name": "Get User Data", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/v1/user/data", "host": ["{{baseUrl}}"], "path": ["api","v1","user","data"] } } }
+      ]
+    },
+    {
+      "name": "Notes",
+      "item": [
+        { "name": "List Notes", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/v1/notes", "host": ["{{baseUrl}}"], "path": ["api","v1","notes"] } } },
+        { "name": "Create Note", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": { "mode": "raw", "raw": "{\n  \"content\": \"My first note\"\n}" }, "url": { "raw": "{{baseUrl}}/api/v1/notes", "host": ["{{baseUrl}}"], "path": ["api","v1","notes"] } } },
+        { "name": "Get Note by ID", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/v1/notes/{{noteId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","notes","{{noteId}}"] } } },
+        { "name": "Update Note", "request": { "method": "PUT", "header": [{"key":"Content-Type","value":"application/json"}], "body": { "mode": "raw", "raw": "{\n  \"content\": \"Updated note\"\n}" }, "url": { "raw": "{{baseUrl}}/api/v1/notes/{{noteId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","notes","{{noteId}}"] } } },
+        { "name": "Delete Note", "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/api/v1/notes/{{noteId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","notes","{{noteId}}"] } } }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000", "type": "string" },
+    { "key": "noteId", "value": "NOTE_ID_HERE", "type": "string" }
+  ]
+}
