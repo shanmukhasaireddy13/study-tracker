@@ -16,6 +16,7 @@ import subjectRouter from './routes/subjectRoutes.js';
 import lessonRouter from './routes/lessonRoutes.js';
 import adminRouter from './routes/adminRoutes.js';
 import streakRouter from './routes/streakRoutes.js';
+import fileRouter from './routes/fileRoutes.js';
 import swaggerUi from 'swagger-ui-express';
 import apiSpec from './docs/openapi.js';
 
@@ -51,6 +52,9 @@ if (process.env.NODE_ENV === 'development') {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
+
+// Serve uploaded files statically
+app.use('/uploads', express.static('uploads'));
 app.use(cors({
     origin: allowedOrigins,
     credentials: true,
@@ -89,5 +93,6 @@ app.use('/api/v1/subjects', subjectRouter);
 app.use('/api/v1/lessons', lessonRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/streak', streakRouter);
+app.use('/api/v1/files', fileRouter);
 
 app.listen(port, () => console.log(`Server started on PORT:${port}`));

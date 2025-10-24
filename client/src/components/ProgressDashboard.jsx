@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react'
 import axios from 'axios'
 import { AppContent } from '../context/AppContexts'
+import { getPhotoUrl } from '../utils/fileUpload'
 
 const ProgressDashboard = () => {
   const { backendUrl } = useContext(AppContent)
@@ -50,7 +51,9 @@ const ProgressDashboard = () => {
     try {
       const { data } = await axios.get(`${backendUrl}/api/v1/study?lesson=${lessonId}`)
       if (data.success) {
-        setEntries(data.data)
+        // Sort entries by date (newest first)
+        const sortedEntries = data.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        setEntries(sortedEntries)
       }
     } catch (error) {
       console.error('Failed to load entries:', error)
@@ -250,11 +253,22 @@ const ProgressDashboard = () => {
             )}
           </div>
 
-          {/* Entry Details */}
-          <div className='lg:col-span-1'>
-            <h4 className='text-sm font-medium text-gray-900 mb-2'>Entry Details</h4>
-            {selectedEntry ? (
-              <div className='space-y-3 max-h-64 overflow-y-auto'>
+              {/* Entry Details */}
+              <div className='lg:col-span-1'>
+                <h4 className='text-sm font-medium text-gray-900 mb-2'>Entry Details</h4>
+                {selectedEntry ? (
+                  <div className='space-y-3 max-h-64 overflow-y-auto'>
+                    {/* Debug Info */}
+                    <div className='text-xs text-gray-500 p-2 bg-gray-100 rounded mb-2'>
+                      <div>Entry ID: {selectedEntry._id}</div>
+                      <div>Subject: {selectedEntry.subject?.name}</div>
+                      <div>Lesson: {selectedEntry.lesson?.name}</div>
+                      <div>Grammar Photos: {selectedEntry.grammar?.photos?.length || 0}</div>
+                      <div>Writing Photos: {selectedEntry.writing?.photos?.length || 0}</div>
+                      <div>Math Photos: {selectedEntry.mathPractice?.photos?.length || 0}</div>
+                      <div>Science Photos: {selectedEntry.sciencePractice?.photos?.length || 0}</div>
+                      <div>Social Photos: {selectedEntry.socialPractice?.photos?.length || 0}</div>
+                    </div>
                 {/* Basic Info */}
                 <div className='space-y-2 text-sm'>
                   <div className='flex justify-between'>
@@ -301,6 +315,34 @@ const ProgressDashboard = () => {
                             Photos: {selectedEntry.grammar.photos.length}
                           </div>
                         )}
+                        {/* Display Grammar Photos */}
+                        {selectedEntry.grammar.photos?.length > 0 && (
+                          <div className='mt-2 space-y-2'>
+                            <div className='text-xs font-medium text-gray-700'>Uploaded Photos:</div>
+                            <div className='space-y-1'>
+                              {selectedEntry.grammar.photos.map((photo, index) => {
+                                const photoUrl = getPhotoUrl(photo, backendUrl)
+                                return (
+                                  <button
+                                    key={index}
+                                    onClick={() => {
+                                      window.open(photoUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes')
+                                    }}
+                                    className='w-full flex items-center justify-between p-2 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors'
+                                  >
+                                    <div className='flex items-center space-x-2'>
+                                      <span className='text-blue-600'>📷</span>
+                                      <span className='text-sm font-medium text-blue-900'>
+                                        Grammar Photo {index + 1}
+                                      </span>
+                                    </div>
+                                    <span className='text-xs text-blue-600'>View</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -313,6 +355,34 @@ const ProgressDashboard = () => {
                         {selectedEntry.writing.photos?.length > 0 && (
                           <div className='text-xs text-gray-600 mt-1'>
                             Photos: {selectedEntry.writing.photos.length}
+                          </div>
+                        )}
+                        {/* Display Writing Photos */}
+                        {selectedEntry.writing.photos?.length > 0 && (
+                          <div className='mt-2 space-y-2'>
+                            <div className='text-xs font-medium text-gray-700'>Uploaded Photos:</div>
+                            <div className='space-y-1'>
+                              {selectedEntry.writing.photos.map((photo, index) => {
+                                const photoUrl = getPhotoUrl(photo, backendUrl)
+                                return (
+                                  <button
+                                    key={index}
+                                    onClick={() => {
+                                      window.open(photoUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes')
+                                    }}
+                                    className='w-full flex items-center justify-between p-2 bg-yellow-50 hover:bg-yellow-100 rounded border border-yellow-200 transition-colors'
+                                  >
+                                    <div className='flex items-center space-x-2'>
+                                      <span className='text-yellow-600'>📷</span>
+                                      <span className='text-sm font-medium text-yellow-900'>
+                                        Writing Photo {index + 1}
+                                      </span>
+                                    </div>
+                                    <span className='text-xs text-yellow-600'>View</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -331,6 +401,34 @@ const ProgressDashboard = () => {
                             Photos: {selectedEntry.mathPractice.photos.length}
                           </div>
                         )}
+                        {/* Display Math Photos */}
+                        {selectedEntry.mathPractice.photos?.length > 0 && (
+                          <div className='mt-2 space-y-2'>
+                            <div className='text-xs font-medium text-gray-700'>Uploaded Photos:</div>
+                            <div className='space-y-1'>
+                              {selectedEntry.mathPractice.photos.map((photo, index) => {
+                                const photoUrl = getPhotoUrl(photo, backendUrl)
+                                return (
+                                  <button
+                                    key={index}
+                                    onClick={() => {
+                                      window.open(photoUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes')
+                                    }}
+                                    className='w-full flex items-center justify-between p-2 bg-purple-50 hover:bg-purple-100 rounded border border-purple-200 transition-colors'
+                                  >
+                                    <div className='flex items-center space-x-2'>
+                                      <span className='text-purple-600'>📷</span>
+                                      <span className='text-sm font-medium text-purple-900'>
+                                        Math Photo {index + 1}
+                                      </span>
+                                    </div>
+                                    <span className='text-xs text-purple-600'>View</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -343,6 +441,34 @@ const ProgressDashboard = () => {
                         {selectedEntry.sciencePractice.photos?.length > 0 && (
                           <div className='text-xs text-gray-600 mt-1'>
                             Photos: {selectedEntry.sciencePractice.photos.length}
+                          </div>
+                        )}
+                        {/* Display Science Photos */}
+                        {selectedEntry.sciencePractice.photos?.length > 0 && (
+                          <div className='mt-2 space-y-2'>
+                            <div className='text-xs font-medium text-gray-700'>Uploaded Photos:</div>
+                            <div className='space-y-1'>
+                              {selectedEntry.sciencePractice.photos.map((photo, index) => {
+                                const photoUrl = getPhotoUrl(photo, backendUrl)
+                                return (
+                                  <button
+                                    key={index}
+                                    onClick={() => {
+                                      window.open(photoUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes')
+                                    }}
+                                    className='w-full flex items-center justify-between p-2 bg-orange-50 hover:bg-orange-100 rounded border border-orange-200 transition-colors'
+                                  >
+                                    <div className='flex items-center space-x-2'>
+                                      <span className='text-orange-600'>📷</span>
+                                      <span className='text-sm font-medium text-orange-900'>
+                                        Science Photo {index + 1}
+                                      </span>
+                                    </div>
+                                    <span className='text-xs text-orange-600'>View</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -359,6 +485,34 @@ const ProgressDashboard = () => {
                         {selectedEntry.socialPractice.photos?.length > 0 && (
                           <div className='text-xs text-gray-600 mt-1'>
                             Photos: {selectedEntry.socialPractice.photos.length}
+                          </div>
+                        )}
+                        {/* Display Social Photos */}
+                        {selectedEntry.socialPractice.photos?.length > 0 && (
+                          <div className='mt-2 space-y-2'>
+                            <div className='text-xs font-medium text-gray-700'>Uploaded Photos:</div>
+                            <div className='space-y-1'>
+                              {selectedEntry.socialPractice.photos.map((photo, index) => {
+                                const photoUrl = getPhotoUrl(photo, backendUrl)
+                                return (
+                                  <button
+                                    key={index}
+                                    onClick={() => {
+                                      window.open(photoUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes')
+                                    }}
+                                    className='w-full flex items-center justify-between p-2 bg-indigo-50 hover:bg-indigo-100 rounded border border-indigo-200 transition-colors'
+                                  >
+                                    <div className='flex items-center space-x-2'>
+                                      <span className='text-indigo-600'>📷</span>
+                                      <span className='text-sm font-medium text-indigo-900'>
+                                        Social Photo {index + 1}
+                                      </span>
+                                    </div>
+                                    <span className='text-xs text-indigo-600'>View</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
                           </div>
                         )}
                       </div>

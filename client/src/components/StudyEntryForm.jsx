@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import axios from 'axios'
 import { toast } from 'react-toastify'
+import { uploadStudyPhotos, validateFiles, getPhotoUrl } from '../utils/fileUpload'
 
 const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
   const [selectedSubject, setSelectedSubject] = useState('')
@@ -76,9 +77,24 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
   }
 
   const handlePhotoUpload = async (section, files) => {
-    // For now, we'll just store file names. In production, you'd upload to cloud storage
-    const photoNames = Array.from(files).map(file => file.name)
-    handleInputChange(section, 'photos', photoNames)
+    try {
+      // Validate files
+      validateFiles(files)
+      
+      // Store files for later upload
+      setFormData(prev => ({
+        ...prev,
+        [section]: {
+          ...prev[section],
+          photos: Array.from(files),
+          completed: true
+        }
+      }))
+      
+      toast.success(`${files.length} photo(s) selected for ${section}`)
+    } catch (error) {
+      toast.error(error.message)
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -95,14 +111,43 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
 
     setLoading(true)
     try {
+      // First, create the study entry without photos
       const payload = {
         subject: selectedSubject,
         lesson: selectedLesson,
         ...formData
       }
 
-      const { data } = await axios.post(`${backendUrl}/api/v1/study`, payload)
+      // Remove photos from payload as they'll be uploaded separately
+      const cleanPayload = { ...payload }
+      Object.keys(cleanPayload).forEach(key => {
+        if (cleanPayload[key] && typeof cleanPayload[key] === 'object' && cleanPayload[key].photos) {
+          cleanPayload[key] = { ...cleanPayload[key] }
+          delete cleanPayload[key].photos
+        }
+      })
+
+      const { data } = await axios.post(`${backendUrl}/api/v1/study`, cleanPayload)
       if (data.success) {
+        const entryId = data.data._id
+        
+        // Upload photos for each activity type
+        const photoUploadPromises = []
+        
+        Object.keys(formData).forEach(activityType => {
+          const activity = formData[activityType]
+          if (activity && activity.photos && activity.photos.length > 0) {
+            photoUploadPromises.push(
+              uploadStudyPhotos(entryId, activityType, activity.photos, backendUrl)
+            )
+          }
+        })
+
+        // Wait for all photo uploads to complete
+        if (photoUploadPromises.length > 0) {
+          await Promise.all(photoUploadPromises)
+        }
+
         toast.success('Study entry saved successfully!')
         onSuccess()
         onClose()
@@ -254,7 +299,7 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
                       />
                       {formData.grammar.photos.length > 0 && (
                         <div className='text-sm text-gray-600 mt-1'>
-                          Photos: {formData.grammar.photos.join(', ')}
+                          Photos: {formData.grammar.photos.map(file => file.name).join(', ')}
                         </div>
                       )}
                     </div>
@@ -320,7 +365,7 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
                     />
                     {formData.writing.photos.length > 0 && (
                       <div className='text-sm text-gray-600 mt-1'>
-                        Photos: {formData.writing.photos.join(', ')}
+                        Photos: {formData.writing.photos.map(file => file.name).join(', ')}
                       </div>
                     )}
                   </div>
@@ -457,7 +502,7 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
                       />
                       {formData.sciencePractice.photos.length > 0 && (
                         <div className='text-sm text-gray-600 mt-1'>
-                          Photos: {formData.sciencePractice.photos.join(', ')}
+                          Photos: {formData.sciencePractice.photos.map(file => file.name).join(', ')}
                         </div>
                       )}
                     </div>

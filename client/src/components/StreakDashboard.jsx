@@ -184,9 +184,10 @@ const StreakDashboard = ({ backendUrl }) => {
                     const currentDate = new Date(startDate)
                     currentDate.setDate(startDate.getDate() + i)
                     
-                    const hasStudied = recentEntries.some(entry => 
-                      new Date(entry.createdAt).toDateString() === currentDate.toDateString()
-                    )
+                    const hasStudied = streakData?.studyCalendar?.some(entry => {
+                      const entryDate = new Date(entry.date)
+                      return entryDate.toDateString() === currentDate.toDateString()
+                    }) || false
                     
                     const isToday = currentDate.toDateString() === today.toDateString()
                     const isCurrentMonth = currentDate.getMonth() === today.getMonth()

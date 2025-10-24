@@ -65,7 +65,26 @@ export const updateStreak = async (req, res) => {
         const userId = req.user.id;
         const { studyEntry } = req.body;
 
-        await calculateStreak(userId);
+        // Check if streak needs to be updated for today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const dateStr = today.toISOString().split('T')[0];
+        
+        const streak = await streakModel.findOne({ user: userId });
+        if (!streak) {
+            await calculateStreak(userId);
+        } else {
+            // Check if we already have a calendar entry for today
+            const existingCalendarEntry = streak.studyCalendar.find(entry => 
+                entry.date.toISOString().split('T')[0] === dateStr
+            );
+            
+            // Only recalculate streak if this is the first entry for today
+            if (!existingCalendarEntry) {
+                await calculateStreak(userId);
+            }
+        }
+
         await updateStudyCalendar(userId, studyEntry);
         await updateProgress(userId, studyEntry);
         await checkAchievements(userId);
@@ -183,21 +202,22 @@ export const calculateStreak = async (userId) => {
     let currentStreak = 0;
     let checkDate = new Date(today);
     
-    // Check if there's a study entry today or yesterday
     const todayStr = checkDate.toISOString().split('T')[0];
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
     
-    // If there's a study entry today, start counting from today
+    // Check if there's a study entry today
     if (studyByDate[todayStr]) {
+        // Start counting from today
         checkDate = new Date(today);
     } 
-    // If no entry today but there's an entry yesterday, start counting from yesterday
+    // If no entry today, check yesterday
     else if (studyByDate[yesterdayStr]) {
+        // Start counting from yesterday
         checkDate = new Date(yesterday);
     }
-    // If no entry today or yesterday, check if there's a gap of more than 1 day
+    // If no entry today or yesterday, check for gaps
     else {
         // Find the most recent study entry
         const recentDates = Object.keys(studyByDate).sort().reverse();
@@ -205,18 +225,21 @@ export const calculateStreak = async (userId) => {
             const lastStudyDate = new Date(recentDates[0]);
             const daysSinceLastStudy = Math.floor((today.getTime() - lastStudyDate.getTime()) / (1000 * 60 * 60 * 24));
             
+            // If more than 1 day gap, reset streak to 0
             if (daysSinceLastStudy > 1) {
                 currentStreak = 0;
             } else {
+                // Only 1 day gap, continue from last study date
                 checkDate = lastStudyDate;
             }
         } else {
+            // No study entries at all
             currentStreak = 0;
         }
     }
     
-    // If we have a starting point, count consecutive days backwards
-    if (currentStreak === 0 && checkDate) {
+    // Count consecutive days backwards from checkDate
+    if (checkDate && currentStreak === 0) {
         while (true) {
             const dateStr = checkDate.toISOString().split('T')[0];
             

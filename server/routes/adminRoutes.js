@@ -19,6 +19,7 @@ import {
     getLessonsBySubject 
 } from '../controllers/lessonController.js';
 import { getStudyStats } from '../controllers/studyController.js';
+import { getAllStudentPerformance, getStudentDetailedPerformance, getSystemAnalytics } from '../controllers/adminController.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 
@@ -102,6 +103,11 @@ router.delete('/lessons/:id', validate(idParams), deleteLesson);
 
 // Student progress overview
 router.get('/stats', getStudyStats);
+
+// Student performance analytics
+router.get('/students/performance', getAllStudentPerformance);
+router.get('/students/:studentId/performance', getStudentDetailedPerformance);
+router.get('/analytics', getSystemAnalytics);
 
 // Admin profile management
 router.get('/profile', async (req, res) => {

@@ -106,42 +106,31 @@ export const createStudyEntry = async (req, res) => {
 // Get study entries for a student
 export const getStudyEntries = async (req, res) => {
     try {
-        const { subject, date, limit = 50, page = 1 } = req.query;
+        const { subject, lesson, date } = req.query;
         const query = { student: req.user.id };
         
         console.log('Getting study entries for student:', req.user.id, 'query:', req.query);
 
         if (subject) query.subject = subject;
+        if (lesson) query.lesson = lesson;
         if (date) {
             const startDate = new Date(date);
             const endDate = new Date(date);
             endDate.setDate(endDate.getDate() + 1);
             query.createdAt = { $gte: startDate, $lt: endDate };
         }
-
-        const skip = (parseInt(page) - 1) * parseInt(limit);
         
         const entries = await studyEntryModel
             .find(query)
             .populate('subject', 'name totalMarks color icon')
             .populate('lesson', 'name chapterNumber')
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(parseInt(limit));
+            .sort({ createdAt: -1 });
 
-        const total = await studyEntryModel.countDocuments(query);
-
-        console.log('Found', entries.length, 'study entries out of', total, 'total');
+        console.log('Found', entries.length, 'study entries');
 
         res.json({ 
             success: true, 
-            data: entries,
-            pagination: {
-                total,
-                page: parseInt(page),
-                limit: parseInt(limit),
-                pages: Math.ceil(total / parseInt(limit))
-            }
+            data: entries
         });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
