@@ -1,13 +1,15 @@
-import React, { useContext } from 'react'
+import React, { useContext, Suspense, lazy } from 'react'
 import { Routes,Route } from 'react-router-dom'
 import Login from './pages/Login'
-import StudyTracker from './pages/StudyTracker'
-import AdminPanel from './pages/AdminPanel'
-import AdminSetup from './pages/AdminSetup'
 import Navigation from './components/Navigation'
 import { ToastContainer } from 'react-toastify';
 import ProtectedRoute from './components/ProtectedRoute'
 import { AppContent } from './context/AppContexts'
+
+// Lazy load heavy components for better performance
+const StudyTracker = lazy(() => import('./pages/StudyTracker'))
+const AdminPanel = lazy(() => import('./pages/AdminPanel'))
+const AdminSetup = lazy(() => import('./pages/AdminSetup'))
 
 
 const App = () => {
@@ -55,7 +57,14 @@ const App = () => {
       return (
         <>
           <Navigation />
-          <AdminPanel />
+          <Suspense fallback={<div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-4xl mb-4">⏳</div>
+              <h1 className="text-2xl font-bold text-gray-900">Loading Admin Panel...</h1>
+            </div>
+          </div>}>
+            <AdminPanel />
+          </Suspense>
         </>
       )
     } else {
@@ -63,7 +72,14 @@ const App = () => {
       return (
         <>
           <Navigation />
-          <StudyTracker />
+          <Suspense fallback={<div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-4xl mb-4">⏳</div>
+              <h1 className="text-2xl font-bold text-gray-900">Loading Study Tracker...</h1>
+            </div>
+          </div>}>
+            <StudyTracker />
+          </Suspense>
         </>
       )
     }
@@ -81,7 +97,14 @@ const App = () => {
         <Route path='/setup' element={
           <ProtectedRoute>
             <AdminOnlyRoute>
-              <AdminSetup/>
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-4xl mb-4">⏳</div>
+                  <h1 className="text-2xl font-bold text-gray-900">Loading Setup...</h1>
+                </div>
+              </div>}>
+                <AdminSetup/>
+              </Suspense>
             </AdminOnlyRoute>
           </ProtectedRoute>
         }/>

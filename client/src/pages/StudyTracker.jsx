@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react'
+import React, { useContext, useEffect, useState, useMemo, useCallback } from 'react'
 import axios from 'axios'
 import { AppContent } from '../context/AppContexts'
 import { useNavigate } from 'react-router-dom'
@@ -19,7 +19,7 @@ const StudyTracker = () => {
   const [filterDate, setFilterDate] = useState('')
   const [activeTab, setActiveTab] = useState('tracker')
 
-  const loadSubjects = async () => {
+  const loadSubjects = useCallback(async () => {
     try {
       const { data } = await axios.get(backendUrl + '/api/v1/subjects')
       if (data.success) {
@@ -32,7 +32,7 @@ const StudyTracker = () => {
     } catch (error) {
       toast.error('Failed to load subjects')
     }
-  }
+  }, [backendUrl])
 
   const initializeSubjects = async () => {
     try {

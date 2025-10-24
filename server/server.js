@@ -2,6 +2,9 @@ import express from "express";
 import cors from "cors";
 import "dotenv/config";
 import cookieParser from "cookie-parser";
+import compression from "compression";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { connect } from "mongoose";
 import connectDB from './config/mongodb.js';
 import authRouter from './routes/authRoutes.js';
@@ -20,16 +23,33 @@ const app = express();
 const port = process.env.PORT || 4000;
 connectDB();
 
+// Performance middleware
+app.use(compression()); // Compress responses
+app.use(helmet()); // Security headers
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.'
+});
+app.use('/api/', limiter);
+
 const allowedOrigins = [
     'http://localhost:5173',
     process.env.FRONTEND_URL
 ].filter(Boolean);
-app.use((req,res,next)=>{
+
+// Logging middleware (only in development)
+if (process.env.NODE_ENV === 'development') {
+  app.use((req,res,next)=>{
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`)
     next()
   })
+}
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 app.use(cors({
     origin: allowedOrigins,
@@ -41,6 +61,23 @@ app.use(cors({
 // Swagger setup (separate spec)
 const spec = { ...apiSpec, servers: [{ url: 'http://localhost:' + port }] };
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(spec));
+
+// Caching middleware
+app.use((req, res, next) => {
+  // Cache static assets for 1 year
+  if (req.url.match(/\.(css|js|png|jpg|jpeg|gif|ico|svg)$/)) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+  }
+  // Cache API responses for 5 minutes
+  else if (req.url.startsWith('/api/v1/subjects') || req.url.startsWith('/api/v1/lessons')) {
+    res.setHeader('Cache-Control', 'public, max-age=300');
+  }
+  // No cache for dynamic data
+  else if (req.url.startsWith('/api/v1/study') || req.url.startsWith('/api/v1/streak')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+  next();
+});
 
 // API Endpoints
 app.get('/', (req, res) => res.send("API WORKING"));
