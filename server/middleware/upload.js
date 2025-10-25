@@ -16,12 +16,23 @@ if (!fs.existsSync(uploadsDir)) {
 // Configure multer for memory storage
 const storage = multer.memoryStorage();
 
-// File filter for images only
+// File filter for images, PDFs, and Word documents
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image/')) {
+  const allowedTypes = [
+    'image/jpeg',
+    'image/jpg', 
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ];
+  
+  if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Only image files are allowed!'), false);
+    cb(new Error('Only image files, PDFs, and Word documents are allowed!'), false);
   }
 };
 
@@ -30,8 +41,8 @@ const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-    files: 10 // Maximum 10 files per request
+    fileSize: 10 * 1024 * 1024, // 10MB limit for documents
+    files: 20 // Maximum 20 files per request
   }
 });
 
@@ -71,11 +82,96 @@ export const processImages = async (files, activityType, studentId) => {
   return processedImages;
 };
 
+// Process and save uploaded documents (PDFs and Word files)
+export const processDocuments = async (files, activityType, studentId) => {
+  if (!files || files.length === 0) {
+    return [];
+  }
+
+  const processedDocuments = [];
+  const timestamp = Date.now();
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const originalName = file.originalname;
+    const extension = path.extname(originalName);
+    const filename = `${activityType}_${studentId}_${timestamp}_${i}${extension}`;
+    const filepath = path.join(uploadsDir, filename);
+
+    try {
+      // Save document as-is (no processing needed for PDFs/Word)
+      fs.writeFileSync(filepath, file.buffer);
+
+      // Store relative path for database
+      const relativePath = `/uploads/${filename}`;
+      processedDocuments.push({
+        path: relativePath,
+        originalName: originalName,
+        type: file.mimetype,
+        size: file.size
+      });
+    } catch (error) {
+      console.error('Error processing document:', error);
+      throw new Error(`Failed to process document ${i + 1}: ${error.message}`);
+    }
+  }
+
+  return processedDocuments;
+};
+
+// Process mixed files (images and documents)
+export const processMixedFiles = async (files, activityType, studentId) => {
+  if (!files || files.length === 0) {
+    return { images: [], documents: [] };
+  }
+
+  const images = [];
+  const documents = [];
+  const timestamp = Date.now();
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const originalName = file.originalname;
+    const extension = path.extname(originalName);
+    const filename = `${activityType}_${studentId}_${timestamp}_${i}${extension}`;
+    const filepath = path.join(uploadsDir, filename);
+
+    try {
+      if (file.mimetype.startsWith('image/')) {
+        // Process image with sharp
+        await sharp(file.buffer)
+          .resize(800, 600, { 
+            fit: 'inside',
+            withoutEnlargement: true 
+          })
+          .webp({ quality: 80 })
+          .toFile(filepath);
+
+        images.push(`/uploads/${filename}`);
+      } else {
+        // Save document as-is
+        fs.writeFileSync(filepath, file.buffer);
+        documents.push({
+          path: `/uploads/${filename}`,
+          originalName: originalName,
+          type: file.mimetype,
+          size: file.size
+        });
+      }
+    } catch (error) {
+      console.error('Error processing file:', error);
+      throw new Error(`Failed to process file ${i + 1}: ${error.message}`);
+    }
+  }
+
+  return { images, documents };
+};
+
 // Single file upload middleware
 export const uploadSingle = upload.single('photo');
 
 // Multiple files upload middleware
-export const uploadMultiple = upload.array('photos', 10);
+export const uploadMultiple = upload.array('photos', 20);
 
 // Error handling middleware
 export const handleUploadError = (error, req, res, next) => {
@@ -83,13 +179,13 @@ export const handleUploadError = (error, req, res, next) => {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
         success: false,
-        message: 'File too large. Maximum size is 5MB.'
+        message: 'File too large. Maximum size is 10MB.'
       });
     }
     if (error.code === 'LIMIT_FILE_COUNT') {
       return res.status(400).json({
         success: false,
-        message: 'Too many files. Maximum is 10 files.'
+        message: 'Too many files. Maximum is 20 files.'
       });
     }
     if (error.code === 'LIMIT_UNEXPECTED_FILE') {
@@ -100,10 +196,10 @@ export const handleUploadError = (error, req, res, next) => {
     }
   }
   
-  if (error.message === 'Only image files are allowed!') {
+  if (error.message === 'Only image files, PDFs, and Word documents are allowed!') {
     return res.status(400).json({
       success: false,
-      message: 'Only image files are allowed!'
+      message: 'Only image files, PDFs, and Word documents are allowed!'
     });
   }
 

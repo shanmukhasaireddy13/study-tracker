@@ -30,6 +30,12 @@ const createEntrySchema = {
             completed: z.boolean().optional(),
             topic: z.string().optional(),
             photos: z.array(z.string()).optional(),
+            documents: z.array(z.object({
+                path: z.string(),
+                originalName: z.string(),
+                type: z.string(),
+                size: z.number()
+            })).optional(),
             notes: z.string().optional()
         }).optional(),
         writing: z.object({
@@ -37,6 +43,12 @@ const createEntrySchema = {
             type: z.enum(['questions', 'letters', 'essays', 'other']).optional(),
             topic: z.string().optional(),
             photos: z.array(z.string()).optional(),
+            documents: z.array(z.object({
+                path: z.string(),
+                originalName: z.string(),
+                type: z.string(),
+                size: z.number()
+            })).optional(),
             notes: z.string().optional()
         }).optional(),
         mathPractice: z.object({
@@ -44,6 +56,12 @@ const createEntrySchema = {
             formulas: z.array(z.string()).optional(),
             problemsSolved: z.number().optional(),
             photos: z.array(z.string()).optional(),
+            documents: z.array(z.object({
+                path: z.string(),
+                originalName: z.string(),
+                type: z.string(),
+                size: z.number()
+            })).optional(),
             notes: z.string().optional()
         }).optional(),
         sciencePractice: z.object({
@@ -51,12 +69,24 @@ const createEntrySchema = {
             diagrams: z.boolean().optional(),
             questionsAnswered: z.number().optional(),
             photos: z.array(z.string()).optional(),
+            documents: z.array(z.object({
+                path: z.string(),
+                originalName: z.string(),
+                type: z.string(),
+                size: z.number()
+            })).optional(),
             notes: z.string().optional()
         }).optional(),
         socialPractice: z.object({
             completed: z.boolean().optional(),
             questionsAnswered: z.number().optional(),
             photos: z.array(z.string()).optional(),
+            documents: z.array(z.object({
+                path: z.string(),
+                originalName: z.string(),
+                type: z.string(),
+                size: z.number()
+            })).optional(),
             notes: z.string().optional()
         }).optional(),
         confidence: z.number().min(1).max(5).optional(),
@@ -77,6 +107,12 @@ const updateEntrySchema = {
             completed: z.boolean().optional(),
             topic: z.string().optional(),
             photos: z.array(z.string()).optional(),
+            documents: z.array(z.object({
+                path: z.string(),
+                originalName: z.string(),
+                type: z.string(),
+                size: z.number()
+            })).optional(),
             notes: z.string().optional()
         }).optional(),
         writing: z.object({
@@ -84,6 +120,12 @@ const updateEntrySchema = {
             type: z.enum(['questions', 'letters', 'essays', 'other']).optional(),
             topic: z.string().optional(),
             photos: z.array(z.string()).optional(),
+            documents: z.array(z.object({
+                path: z.string(),
+                originalName: z.string(),
+                type: z.string(),
+                size: z.number()
+            })).optional(),
             notes: z.string().optional()
         }).optional(),
         mathPractice: z.object({
@@ -91,6 +133,12 @@ const updateEntrySchema = {
             formulas: z.array(z.string()).optional(),
             problemsSolved: z.number().optional(),
             photos: z.array(z.string()).optional(),
+            documents: z.array(z.object({
+                path: z.string(),
+                originalName: z.string(),
+                type: z.string(),
+                size: z.number()
+            })).optional(),
             notes: z.string().optional()
         }).optional(),
         sciencePractice: z.object({
@@ -98,12 +146,24 @@ const updateEntrySchema = {
             diagrams: z.boolean().optional(),
             questionsAnswered: z.number().optional(),
             photos: z.array(z.string()).optional(),
+            documents: z.array(z.object({
+                path: z.string(),
+                originalName: z.string(),
+                type: z.string(),
+                size: z.number()
+            })).optional(),
             notes: z.string().optional()
         }).optional(),
         socialPractice: z.object({
             completed: z.boolean().optional(),
             questionsAnswered: z.number().optional(),
             photos: z.array(z.string()).optional(),
+            documents: z.array(z.object({
+                path: z.string(),
+                originalName: z.string(),
+                type: z.string(),
+                size: z.number()
+            })).optional(),
             notes: z.string().optional()
         }).optional(),
         confidence: z.number().min(1).max(5).optional(),

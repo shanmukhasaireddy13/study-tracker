@@ -26,7 +26,7 @@ export const getSubject = async (req, res) => {
 // Create subject (admin only - for initial setup)
 export const createSubject = async (req, res) => {
     try {
-        const { name, totalMarks, color, icon, description } = req.body;
+        const { name, totalMarks, color, icon, description, type } = req.body;
         
         if (!name || !totalMarks) {
             return res.status(400).json({ 
@@ -40,7 +40,8 @@ export const createSubject = async (req, res) => {
             totalMarks: parseInt(totalMarks),
             color: color || '#3B82F6',
             icon: icon || '📚',
-            description: description || ''
+            description: description || '',
+            type: type || 'general'
         });
 
         res.status(201).json({ success: true, data: subject });
@@ -58,7 +59,7 @@ export const createSubject = async (req, res) => {
 // Update subject
 export const updateSubject = async (req, res) => {
     try {
-        const { name, totalMarks, color, icon, description } = req.body;
+        const { name, totalMarks, color, icon, description, type } = req.body;
         
         const subject = await subjectModel.findById(req.params.id);
         if (!subject) {
@@ -70,6 +71,7 @@ export const updateSubject = async (req, res) => {
         if (color) subject.color = color;
         if (icon) subject.icon = icon;
         if (description !== undefined) subject.description = description;
+        if (type) subject.type = type;
 
         await subject.save();
         res.json({ success: true, data: subject });
@@ -99,35 +101,26 @@ export const deleteSubject = async (req, res) => {
     }
 };
 
-// Initialize default subjects for 10th class
+// Initialize subjects - now completely dynamic
 export const initializeSubjects = async (req, res) => {
     try {
-        const defaultSubjects = [
-            { name: 'Telugu', totalMarks: 100, color: '#EF4444', icon: '📖', description: 'Telugu Language and Literature' },
-            { name: 'Hindi', totalMarks: 100, color: '#F97316', icon: '📚', description: 'Hindi Language and Literature' },
-            { name: 'English', totalMarks: 100, color: '#3B82F6', icon: '📝', description: 'English Language and Literature' },
-            { name: 'Maths', totalMarks: 100, color: '#8B5CF6', icon: '🔢', description: 'Mathematics' },
-            { name: 'Social Studies', totalMarks: 100, color: '#10B981', icon: '🌍', description: 'History, Geography, Civics, Economics' },
-            { name: 'Biology', totalMarks: 50, color: '#8B5CF6', icon: '🧬', description: 'Life Sciences and Biology' },
-            { name: 'Physical Science', totalMarks: 50, color: '#06B6D4', icon: '⚗️', description: 'Physics and Chemistry' }
-        ];
-
-        const createdSubjects = [];
+        // Check if any subjects exist
+        const existingSubjects = await subjectModel.find();
         
-        for (const subjectData of defaultSubjects) {
-            const existingSubject = await subjectModel.findOne({ name: subjectData.name });
-            if (!existingSubject) {
-                const subject = await subjectModel.create(subjectData);
-                createdSubjects.push(subject);
-            } else {
-                createdSubjects.push(existingSubject);
-            }
+        if (existingSubjects.length > 0) {
+            return res.json({ 
+                success: true, 
+                message: 'Subjects already exist',
+                data: existingSubjects 
+            });
         }
 
+        // If no subjects exist, return empty array
+        // Admin will need to create subjects manually
         res.json({ 
             success: true, 
-            message: 'Subjects initialized successfully',
-            data: createdSubjects
+            message: 'No subjects found. Please create subjects using the admin panel.',
+            data: [] 
         });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

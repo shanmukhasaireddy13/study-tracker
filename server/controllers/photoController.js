@@ -1,5 +1,5 @@
 import studyEntryModel from '../models/studyEntryModel.js';
-import { processImages } from '../middleware/upload.js';
+import { processImages, processMixedFiles } from '../middleware/upload.js';
 
 // Upload photos and update study entry
 export const uploadStudyPhotos = async (req, res) => {
@@ -34,12 +34,13 @@ export const uploadStudyPhotos = async (req, res) => {
       });
     }
 
-    // Process and save images
-    const imagePaths = await processImages(req.files, activityType, studentId);
+    // Process and save mixed files (images and documents)
+    const { images, documents } = await processMixedFiles(req.files, activityType, studentId);
 
-    // Update the study entry with photo paths
+    // Update the study entry with file paths
     const updateData = {};
-    updateData[`${activityType}.photos`] = imagePaths;
+    updateData[`${activityType}.photos`] = images;
+    updateData[`${activityType}.documents`] = documents;
     updateData[`${activityType}.completed`] = true;
 
     const updatedEntry = await studyEntryModel.findByIdAndUpdate(
@@ -50,11 +51,12 @@ export const uploadStudyPhotos = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Photos uploaded successfully',
+      message: 'Files uploaded successfully',
       data: {
         entry: updatedEntry,
-        photos: imagePaths,
-        count: imagePaths.length
+        images: images,
+        documents: documents,
+        totalFiles: images.length + documents.length
       }
     });
   } catch (error) {

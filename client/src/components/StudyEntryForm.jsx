@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import axios from 'axios'
 import { toast } from 'react-toastify'
-import { uploadStudyPhotos, validateFiles, getPhotoUrl } from '../utils/fileUpload'
+import { uploadStudyPhotos, validateFiles, getPhotoUrl, getFileTypeIcon, formatFileSize } from '../utils/fileUpload'
 
 const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
   const [selectedSubject, setSelectedSubject] = useState('')
@@ -12,11 +12,11 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
   // Form data
   const [formData, setFormData] = useState({
     reading: { completed: false, notes: '' },
-    grammar: { completed: false, topic: '', photos: [], notes: '' },
-    writing: { completed: false, type: 'questions', topic: '', photos: [], notes: '' },
-    mathPractice: { completed: false, formulas: [], problemsSolved: 0, photos: [], notes: '' },
-    sciencePractice: { completed: false, diagrams: false, questionsAnswered: 0, photos: [], notes: '' },
-    socialPractice: { completed: false, questionsAnswered: 0, photos: [], notes: '' },
+    grammar: { completed: false, topic: '', photos: [], documents: [], notes: '' },
+    writing: { completed: false, type: 'questions', topic: '', photos: [], documents: [], notes: '' },
+    mathPractice: { completed: false, formulas: [], problemsSolved: 0, photos: [], documents: [], notes: '' },
+    sciencePractice: { completed: false, diagrams: false, questionsAnswered: 0, photos: [], documents: [], notes: '' },
+    socialPractice: { completed: false, questionsAnswered: 0, photos: [], documents: [], notes: '' },
     confidence: 3,
     totalTime: 0
   })
@@ -76,7 +76,7 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
     }))
   }
 
-  const handlePhotoUpload = async (section, files) => {
+  const handleFileUpload = async (section, files) => {
     try {
       // Validate files
       validateFiles(files)
@@ -91,10 +91,20 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
         }
       }))
       
-      toast.success(`${files.length} photo(s) selected for ${section}`)
+      toast.success(`${files.length} file(s) selected for ${section}`)
     } catch (error) {
       toast.error(error.message)
     }
+  }
+
+  const removeFile = (section, fileIndex) => {
+    setFormData(prev => ({
+      ...prev,
+      [section]: {
+        ...prev[section],
+        photos: prev[section].photos.filter((_, index) => index !== fileIndex)
+      }
+    }))
   }
 
   const handleSubmit = async (e) => {
@@ -118,12 +128,13 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
         ...formData
       }
 
-      // Remove photos from payload as they'll be uploaded separately
+      // Remove photos and documents from payload as they'll be uploaded separately
       const cleanPayload = { ...payload }
       Object.keys(cleanPayload).forEach(key => {
-        if (cleanPayload[key] && typeof cleanPayload[key] === 'object' && cleanPayload[key].photos) {
+        if (cleanPayload[key] && typeof cleanPayload[key] === 'object') {
           cleanPayload[key] = { ...cleanPayload[key] }
           delete cleanPayload[key].photos
+          delete cleanPayload[key].documents
         }
       })
 
@@ -166,13 +177,8 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
     const subject = subjects.find(s => s._id === subjectId)
     if (!subject) return 'general'
     
-    const name = subject.name.toLowerCase()
-    if (['telugu', 'hindi', 'english'].includes(name)) return 'language'
-    if (name === 'maths') return 'maths'
-    if (name === 'physical science') return 'science'
-    if (name === 'biology') return 'science'
-    if (name === 'social studies') return 'social'
-    return 'general'
+    // Use subject type from database only
+    return subject.type || 'general'
   }
 
   const subjectType = getSubjectType(selectedSubject)
@@ -289,17 +295,34 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
                       />
                     </div>
                     <div>
-                      <label className='block text-sm text-gray-600 mb-1'>Upload Photos</label>
+                      <label className='block text-sm text-gray-600 mb-1'>Upload Files (Images, PDFs, Word docs)</label>
                       <input 
                         type='file' 
                         multiple
-                        accept='image/*'
-                        onChange={(e) => handlePhotoUpload('grammar', e.target.files)}
+                        accept='image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                        onChange={(e) => handleFileUpload('grammar', e.target.files)}
                         className='w-full border border-gray-300 rounded-lg px-3 py-2'
                       />
                       {formData.grammar.photos.length > 0 && (
-                        <div className='text-sm text-gray-600 mt-1'>
-                          Photos: {formData.grammar.photos.map(file => file.name).join(', ')}
+                        <div className='mt-2 space-y-1'>
+                          {formData.grammar.photos.map((file, index) => (
+                            <div key={index} className='flex items-center justify-between p-2 bg-gray-50 rounded border'>
+                              <div className='flex items-center space-x-2'>
+                                <span className='text-lg'>{getFileTypeIcon(file.type)}</span>
+                                <div>
+                                  <div className='text-sm font-medium'>{file.name}</div>
+                                  <div className='text-xs text-gray-500'>{formatFileSize(file.size)}</div>
+                                </div>
+                              </div>
+                              <button
+                                type='button'
+                                onClick={() => removeFile('grammar', index)}
+                                className='text-red-500 hover:text-red-700 text-sm'
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -355,17 +378,34 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
                     />
                   </div>
                   <div>
-                    <label className='block text-sm text-gray-600 mb-1'>Upload Photos of Written Work</label>
+                    <label className='block text-sm text-gray-600 mb-1'>Upload Files (Images, PDFs, Word docs)</label>
                     <input 
                       type='file' 
                       multiple
-                      accept='image/*'
-                      onChange={(e) => handlePhotoUpload('writing', e.target.files)}
+                      accept='image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                      onChange={(e) => handleFileUpload('writing', e.target.files)}
                       className='w-full border border-gray-300 rounded-lg px-3 py-2'
                     />
                     {formData.writing.photos.length > 0 && (
-                      <div className='text-sm text-gray-600 mt-1'>
-                        Photos: {formData.writing.photos.map(file => file.name).join(', ')}
+                      <div className='mt-2 space-y-1'>
+                        {formData.writing.photos.map((file, index) => (
+                          <div key={index} className='flex items-center justify-between p-2 bg-gray-50 rounded border'>
+                            <div className='flex items-center space-x-2'>
+                              <span className='text-lg'>{getFileTypeIcon(file.type)}</span>
+                              <div>
+                                <div className='text-sm font-medium'>{file.name}</div>
+                                <div className='text-xs text-gray-500'>{formatFileSize(file.size)}</div>
+                              </div>
+                            </div>
+                            <button
+                              type='button'
+                              onClick={() => removeFile('writing', index)}
+                              className='text-red-500 hover:text-red-700 text-sm'
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -383,7 +423,7 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
               )}
             </div>
 
-            {/* Math Practice (for Maths subject) */}
+            {/* Math Practice */}
             {subjectType === 'maths' && (
               <div className='border rounded-lg p-4'>
                 <div className='flex items-center mb-3'>
@@ -418,17 +458,34 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
                       />
                     </div>
                     <div>
-                      <label className='block text-sm text-gray-600 mb-1'>Upload Photos of Solved Problems</label>
+                      <label className='block text-sm text-gray-600 mb-1'>Upload Files (Images, PDFs, Word docs)</label>
                       <input 
                         type='file' 
                         multiple
-                        accept='image/*'
-                        onChange={(e) => handlePhotoUpload('mathPractice', e.target.files)}
+                        accept='image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                        onChange={(e) => handleFileUpload('mathPractice', e.target.files)}
                         className='w-full border border-gray-300 rounded-lg px-3 py-2'
                       />
                       {formData.mathPractice.photos.length > 0 && (
-                        <div className='text-sm text-gray-600 mt-1'>
-                          Photos: {formData.mathPractice.photos.join(', ')}
+                        <div className='mt-2 space-y-1'>
+                          {formData.mathPractice.photos.map((file, index) => (
+                            <div key={index} className='flex items-center justify-between p-2 bg-gray-50 rounded border'>
+                              <div className='flex items-center space-x-2'>
+                                <span className='text-lg'>{getFileTypeIcon(file.type)}</span>
+                                <div>
+                                  <div className='text-sm font-medium'>{file.name}</div>
+                                  <div className='text-xs text-gray-500'>{formatFileSize(file.size)}</div>
+                                </div>
+                              </div>
+                              <button
+                                type='button'
+                                onClick={() => removeFile('mathPractice', index)}
+                                className='text-red-500 hover:text-red-700 text-sm'
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -448,7 +505,7 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
             )}
 
 
-            {/* Science Practice (for Biology & Physical Science) */}
+            {/* Science Practice */}
             {subjectType === 'science' && (
               <div className='border rounded-lg p-4'>
                 <div className='flex items-center mb-3'>
@@ -459,10 +516,7 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
                     className='mr-2'
                   />
                   <h3 className='font-medium text-gray-900'>
-                    {selectedSubject && subjects.find(s => s._id === selectedSubject)?.name === 'Biology' 
-                      ? '🧬 Biology Practice' 
-                      : '⚗️ Physics & Chemistry Practice'
-                    }
+                    ⚗️ Science Practice
                   </h3>
                 </div>
                 {formData.sciencePractice.completed && (
@@ -488,21 +542,35 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
                     </div>
                     <div>
                       <label className='block text-sm text-gray-600 mb-1'>
-                        {selectedSubject && subjects.find(s => s._id === selectedSubject)?.name === 'Biology' 
-                          ? 'Upload Photos of Diagrams/Questions' 
-                          : 'Upload Photos of Physics/Chemistry Diagrams/Questions'
-                        }
+                        Upload Files (Images, PDFs, Word docs)
                       </label>
                       <input 
                         type='file' 
                         multiple
-                        accept='image/*'
-                        onChange={(e) => handlePhotoUpload('sciencePractice', e.target.files)}
+                        accept='image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                        onChange={(e) => handleFileUpload('sciencePractice', e.target.files)}
                         className='w-full border border-gray-300 rounded-lg px-3 py-2'
                       />
                       {formData.sciencePractice.photos.length > 0 && (
-                        <div className='text-sm text-gray-600 mt-1'>
-                          Photos: {formData.sciencePractice.photos.map(file => file.name).join(', ')}
+                        <div className='mt-2 space-y-1'>
+                          {formData.sciencePractice.photos.map((file, index) => (
+                            <div key={index} className='flex items-center justify-between p-2 bg-gray-50 rounded border'>
+                              <div className='flex items-center space-x-2'>
+                                <span className='text-lg'>{getFileTypeIcon(file.type)}</span>
+                                <div>
+                                  <div className='text-sm font-medium'>{file.name}</div>
+                                  <div className='text-xs text-gray-500'>{formatFileSize(file.size)}</div>
+                                </div>
+                              </div>
+                              <button
+                                type='button'
+                                onClick={() => removeFile('sciencePractice', index)}
+                                className='text-red-500 hover:text-red-700 text-sm'
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -513,11 +581,7 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
                         onChange={(e) => handleInputChange('sciencePractice', 'notes', e.target.value)}
                         className='w-full border border-gray-300 rounded-lg px-3 py-2'
                         rows={2}
-                        placeholder={
-                          selectedSubject && subjects.find(s => s._id === selectedSubject)?.name === 'Biology' 
-                            ? 'Any notes about biology practice...' 
-                            : 'Any notes about physics/chemistry practice...'
-                        }
+                        placeholder='Any notes about science practice...'
                       />
                     </div>
                   </div>
@@ -550,17 +614,34 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
                       />
                     </div>
                     <div>
-                      <label className='block text-sm text-gray-600 mb-1'>Upload Photos of Answered Questions</label>
+                      <label className='block text-sm text-gray-600 mb-1'>Upload Files (Images, PDFs, Word docs)</label>
                       <input 
                         type='file' 
                         multiple
-                        accept='image/*'
-                        onChange={(e) => handlePhotoUpload('socialPractice', e.target.files)}
+                        accept='image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                        onChange={(e) => handleFileUpload('socialPractice', e.target.files)}
                         className='w-full border border-gray-300 rounded-lg px-3 py-2'
                       />
                       {formData.socialPractice.photos.length > 0 && (
-                        <div className='text-sm text-gray-600 mt-1'>
-                          Photos: {formData.socialPractice.photos.join(', ')}
+                        <div className='mt-2 space-y-1'>
+                          {formData.socialPractice.photos.map((file, index) => (
+                            <div key={index} className='flex items-center justify-between p-2 bg-gray-50 rounded border'>
+                              <div className='flex items-center space-x-2'>
+                                <span className='text-lg'>{getFileTypeIcon(file.type)}</span>
+                                <div>
+                                  <div className='text-sm font-medium'>{file.name}</div>
+                                  <div className='text-xs text-gray-500'>{formatFileSize(file.size)}</div>
+                                </div>
+                              </div>
+                              <button
+                                type='button'
+                                onClick={() => removeFile('socialPractice', index)}
+                                className='text-red-500 hover:text-red-700 text-sm'
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -613,7 +694,7 @@ const StudyEntryForm = ({ subjects, onClose, onSuccess, existingEntry }) => {
                   <input 
                     type='number' 
                     value={formData.totalTime}
-                    onChange={(e) => handleTopLevelChange('totalTime', parseInt(e.target.value) || 0)}
+                    onChange={(e) => handleTopLevelChange('totalTime', parseInt(e.target.value))}
                     className='w-full border border-gray-300 rounded-lg px-3 py-2'
                     min='0'
                     placeholder='e.g., 60 for 1 hour'

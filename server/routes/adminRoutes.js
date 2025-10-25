@@ -38,7 +38,8 @@ const createSubjectSchema = {
         totalMarks: z.number().min(1),
         color: z.string().optional(),
         icon: z.string().optional(),
-        description: z.string().optional()
+        description: z.string().optional(),
+        type: z.enum(['language', 'maths', 'science', 'social', 'general']).optional()
     })
 };
 
@@ -49,7 +50,8 @@ const updateSubjectSchema = {
         totalMarks: z.number().min(1).optional(),
         color: z.string().optional(),
         icon: z.string().optional(),
-        description: z.string().optional()
+        description: z.string().optional(),
+        type: z.enum(['language', 'maths', 'science', 'social', 'general']).optional()
     })
 };
 

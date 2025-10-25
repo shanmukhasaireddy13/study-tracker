@@ -118,20 +118,10 @@ const StudyTracker = () => {
     if (entry.grammar?.completed) activities.push('📝 Grammar')
     if (entry.writing?.completed) activities.push('✍️ Writing')
     if (entry.mathPractice?.completed) {
-      // Show different icons based on subject
-      if (entry.subject?.name === 'Maths') {
-        activities.push('🔢 Math')
-      } else {
-        activities.push('🧮 Math')
-      }
+      activities.push('🔢 Math Practice')
     }
     if (entry.sciencePractice?.completed) {
-      // Show different icons based on subject
-      if (entry.subject?.name === 'Biology') {
-        activities.push('🧬 Biology')
-      } else {
-        activities.push('⚗️ Physics/Chemistry')
-      }
+      activities.push('⚗️ Science Practice')
     }
     if (entry.socialPractice?.completed) activities.push('🌍 Social')
     return activities

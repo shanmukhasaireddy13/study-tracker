@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useState, useMemo } from 'react'
 import { AppContent } from '../context/AppContexts'
 import axios from 'axios'
 import { toast } from 'react-toastify'
-import AdminProgressDashboard from '../components/AdminProgressDashboard'
+import ProgressDashboard from '../components/ProgressDashboard'
 
 const AdminPanel = () => {
   const { backendUrl, userData } = useContext(AppContent)
@@ -26,8 +26,10 @@ const AdminPanel = () => {
     totalMarks: '',
     color: '#3B82F6',
     icon: '📚',
-    description: ''
+    description: '',
+    type: ''
   })
+  const [editingSubject, setEditingSubject] = useState(null)
   
   const [lessonForm, setLessonForm] = useState({
     name: '',
@@ -35,6 +37,7 @@ const AdminPanel = () => {
     subject: '',
     description: ''
   })
+  const [editingLesson, setEditingLesson] = useState(null)
 
   const [profileForm, setProfileForm] = useState({
     name: '',
@@ -241,19 +244,58 @@ const AdminPanel = () => {
     return 'bg-red-100 text-red-800'
   }
 
+  // Function to get suggested icon based on subject type
+  const getSuggestedIcon = (type) => {
+    const iconMap = {
+      'general': '📚',
+      'language': '🅰️',
+      'maths': '🔢',
+      'science': '🔬',
+      'social': '🌍'
+    }
+    return iconMap[type] || '📚'
+  }
+
+  // Handle subject type change with icon suggestion
+  const handleTypeChange = (newType) => {
+    const suggestedIcon = getSuggestedIcon(newType)
+    setSubjectForm({ 
+      ...subjectForm, 
+      type: newType,
+      icon: suggestedIcon // Auto-suggest icon based on type
+    })
+  }
+
   // Form handlers
   const handleSubjectSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
     try {
-      const { data } = await axios.post(`${backendUrl}/api/v1/admin/subjects`, subjectForm)
-      if (data.success) {
-        toast.success('Subject created successfully!')
-        setSubjectForm({ name: '', totalMarks: '', color: '#3B82F6', icon: '📚', description: '' })
-        loadSubjects()
+      // Prepare the data with proper types
+      const formData = {
+        ...subjectForm,
+        totalMarks: parseInt(subjectForm.totalMarks) || 0
       }
+      
+      if (editingSubject) {
+        // Update existing subject
+        const { data } = await axios.put(`${backendUrl}/api/v1/admin/subjects/${editingSubject._id}`, formData)
+        if (data.success) {
+          toast.success('Subject updated successfully!')
+          cancelEditSubject()
+        }
+      } else {
+        // Create new subject
+        const { data } = await axios.post(`${backendUrl}/api/v1/admin/subjects`, formData)
+        if (data.success) {
+          toast.success('Subject created successfully!')
+          setSubjectForm({ name: '', totalMarks: '', color: '#3B82F6', icon: '📚', description: '', type: '' })
+        }
+      }
+      loadSubjects()
     } catch (error) {
-      toast.error('Failed to create subject')
+      console.error('Subject submission error:', error)
+      toast.error(editingSubject ? 'Failed to update subject' : 'Failed to create subject')
     } finally {
       setLoading(false)
     }
@@ -273,14 +315,24 @@ const AdminPanel = () => {
         formData.chapterNumber = parseInt(lessonForm.chapterNumber)
       }
       
-      const { data } = await axios.post(`${backendUrl}/api/v1/admin/lessons`, formData)
-      if (data.success) {
-        toast.success('Lesson created successfully!')
-        setLessonForm({ name: '', chapterNumber: '', subject: '', description: '' })
-        loadLessons()
+      if (editingLesson) {
+        // Update existing lesson
+        const { data } = await axios.put(`${backendUrl}/api/v1/admin/lessons/${editingLesson._id}`, formData)
+        if (data.success) {
+          toast.success('Lesson updated successfully!')
+          cancelEditLesson()
+        }
+      } else {
+        // Create new lesson
+        const { data } = await axios.post(`${backendUrl}/api/v1/admin/lessons`, formData)
+        if (data.success) {
+          toast.success('Lesson created successfully!')
+          setLessonForm({ name: '', chapterNumber: '', subject: '', description: '' })
+        }
       }
+      loadLessons()
     } catch (error) {
-      toast.error('Failed to create lesson')
+      toast.error(editingLesson ? 'Failed to update lesson' : 'Failed to create lesson')
     } finally {
       setLoading(false)
     }
@@ -318,6 +370,56 @@ const AdminPanel = () => {
     }
   }
 
+  const editSubject = (subject) => {
+    setEditingSubject(subject)
+    setSubjectForm({
+      name: subject.name,
+      totalMarks: subject.totalMarks,
+      color: subject.color,
+      icon: subject.icon,
+      description: subject.description,
+      type: subject.type
+    })
+  }
+
+  const cancelEditSubject = () => {
+    setEditingSubject(null)
+    setSubjectForm({
+      name: '',
+      totalMarks: '',
+      color: '#3B82F6',
+      icon: '📚',
+      description: '',
+      type: ''
+    })
+  }
+
+  const updateSubject = async (e) => {
+    e.preventDefault()
+    if (!editingSubject) return
+
+    setLoading(true)
+    try {
+      // Prepare the data with proper types
+      const formData = {
+        ...subjectForm,
+        totalMarks: parseInt(subjectForm.totalMarks) || 0
+      }
+      
+      const { data } = await axios.put(`${backendUrl}/api/v1/admin/subjects/${editingSubject._id}`, formData)
+      if (data.success) {
+        toast.success('Subject updated successfully!')
+        loadSubjects()
+        cancelEditSubject()
+      }
+    } catch (error) {
+      console.error('Subject update error:', error)
+      toast.error('Failed to update subject')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const deleteSubject = async (subjectId) => {
     if (window.confirm('Are you sure you want to delete this subject?')) {
       try {
@@ -329,6 +431,45 @@ const AdminPanel = () => {
       } catch (error) {
         toast.error('Failed to delete subject')
       }
+    }
+  }
+
+  const editLesson = (lesson) => {
+    setEditingLesson(lesson)
+    setLessonForm({
+      name: lesson.name,
+      chapterNumber: lesson.chapterNumber,
+      subject: lesson.subject._id,
+      description: lesson.description
+    })
+  }
+
+  const cancelEditLesson = () => {
+    setEditingLesson(null)
+    setLessonForm({
+      name: '',
+      chapterNumber: '',
+      subject: '',
+      description: ''
+    })
+  }
+
+  const updateLesson = async (e) => {
+    e.preventDefault()
+    if (!editingLesson) return
+
+    setLoading(true)
+    try {
+      const { data } = await axios.put(`${backendUrl}/api/v1/admin/lessons/${editingLesson._id}`, lessonForm)
+      if (data.success) {
+        toast.success('Lesson updated successfully!')
+        loadLessons()
+        cancelEditLesson()
+      }
+    } catch (error) {
+      toast.error('Failed to update lesson')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -403,10 +544,29 @@ const AdminPanel = () => {
         {/* Student Progress Dashboard */}
         {viewingStudentProgress && selectedStudent && (
           <div className='mb-8'>
-            <AdminProgressDashboard 
-              selectedStudent={selectedStudent} 
-              onBack={backToStudents}
-            />
+            <div className='bg-white rounded-lg border'>
+              {/* Header */}
+              <div className='px-4 py-3 border-b bg-gray-50'>
+                <div className='flex items-center justify-between'>
+                  <div>
+                    <h3 className='text-lg font-semibold text-gray-900'>
+                      Progress Dashboard - {selectedStudent.name}
+                    </h3>
+                    <p className='text-sm text-gray-600'>{selectedStudent.email}</p>
+                  </div>
+                  <button
+                    onClick={backToStudents}
+                    className='px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors'
+                  >
+                    ← Back to Students
+                  </button>
+                </div>
+              </div>
+              <ProgressDashboard 
+                studentId={selectedStudent.id} 
+                showHeader={false}
+              />
+            </div>
           </div>
         )}
 
@@ -897,6 +1057,20 @@ const AdminPanel = () => {
             <div className='bg-white rounded-lg shadow-sm border p-6'>
               <h2 className='text-lg font-semibold text-gray-900 mb-4'>Add New Subject</h2>
               <form onSubmit={handleSubjectSubmit} className='space-y-4'>
+                {editingSubject && (
+                  <div className='bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4'>
+                    <p className='text-sm text-blue-800'>
+                      <strong>Editing:</strong> {editingSubject.name}
+                    </p>
+                    <button
+                      type='button'
+                      onClick={cancelEditSubject}
+                      className='text-blue-600 hover:text-blue-800 text-sm mt-1'
+                    >
+                      Cancel Edit
+                    </button>
+                  </div>
+                )}
                 <div>
                   <label className='block text-sm font-medium text-gray-700 mb-1'>Subject Name</label>
                   <input
@@ -929,14 +1103,59 @@ const AdminPanel = () => {
                   </div>
                   <div>
                     <label className='block text-sm font-medium text-gray-700 mb-1'>Icon</label>
-                    <input
-                      type='text'
-                      value={subjectForm.icon}
-                      onChange={(e) => setSubjectForm({ ...subjectForm, icon: e.target.value })}
-                      className='w-full border border-gray-300 rounded-lg px-3 py-2'
-                      placeholder='📚'
-                    />
+                    <div className='flex gap-2'>
+                      <select
+                        value={subjectForm.icon}
+                        onChange={(e) => setSubjectForm({ ...subjectForm, icon: e.target.value })}
+                        className='flex-1 border border-gray-300 rounded-lg px-3 py-2'
+                      >
+                        <option value='📚'>📚 General</option>
+                        <option value='📜'>📜 History/Literature</option>
+                        <option value='🅰️'>🅰️ Language</option>
+                        <option value='🕉️'>🕉️ Religion/Philosophy</option>
+                        <option value='⚛️'>⚛️ Physics</option>
+                        <option value='🧬'>🧬 Biology</option>
+                        <option value='🌍'>🌍 Geography</option>
+                        <option value='🔢'>🔢 Mathematics</option>
+                        <option value='🧪'>🧪 Chemistry</option>
+                        <option value='🎨'>🎨 Arts</option>
+                        <option value='💻'>💻 Computer Science</option>
+                        <option value='🏛️'>🏛️ Social Studies</option>
+                        <option value='📖'>📖 Literature</option>
+                        <option value='🔬'>🔬 Science</option>
+                        <option value='📊'>📊 Statistics</option>
+                        <option value='🎵'>🎵 Music</option>
+                        <option value='🏃'>🏃 Physical Education</option>
+                        <option value='🌱'>🌱 Environmental Science</option>
+                        <option value='⚖️'>⚖️ Law</option>
+                        <option value='💰'>💰 Economics</option>
+                      </select>
+                      <input
+                        type='text'
+                        value={subjectForm.icon}
+                        onChange={(e) => setSubjectForm({ ...subjectForm, icon: e.target.value })}
+                        className='w-16 border border-gray-300 rounded-lg px-2 py-2 text-center'
+                        placeholder='📚'
+                        maxLength='2'
+                      />
+                    </div>
+                    <p className='text-xs text-gray-500 mt-1'>Select from dropdown or enter custom emoji</p>
                   </div>
+                </div>
+                <div>
+                  <label className='block text-sm font-medium text-gray-700 mb-1'>Subject Type</label>
+                  <select
+                    value={subjectForm.type}
+                    onChange={(e) => handleTypeChange(e.target.value)}
+                    className='w-full border border-gray-300 rounded-lg px-3 py-2'
+                  >
+                    <option value='general'>General</option>
+                    <option value='language'>Language</option>
+                    <option value='maths'>Mathematics</option>
+                    <option value='science'>Science</option>
+                    <option value='social'>Social Studies</option>
+                  </select>
+                  <p className='text-xs text-gray-500 mt-1'>Icon will be auto-suggested based on type selection</p>
                 </div>
                 <div>
                   <label className='block text-sm font-medium text-gray-700 mb-1'>Description</label>
@@ -952,7 +1171,7 @@ const AdminPanel = () => {
                   disabled={loading}
                   className='w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white py-2 rounded-lg font-medium'
                 >
-                  {loading ? 'Creating...' : 'Create Subject'}
+                  {loading ? (editingSubject ? 'Updating...' : 'Creating...') : (editingSubject ? 'Update Subject' : 'Create Subject')}
                 </button>
               </form>
             </div>
@@ -967,15 +1186,23 @@ const AdminPanel = () => {
                       <span className='text-lg'>{subject.icon}</span>
                       <div>
                         <div className='font-medium text-gray-900'>{subject.name}</div>
-                        <div className='text-sm text-gray-500'>{subject.totalMarks} marks</div>
+                        <div className='text-sm text-gray-500'>{subject.totalMarks} marks • {subject.type}</div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => deleteSubject(subject._id)}
-                      className='text-red-600 hover:text-red-800 text-sm'
-                    >
-                      Delete
-                    </button>
+                    <div className='flex space-x-2'>
+                      <button
+                        onClick={() => editSubject(subject)}
+                        className='text-blue-600 hover:text-blue-800 text-sm'
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => deleteSubject(subject._id)}
+                        className='text-red-600 hover:text-red-800 text-sm'
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -990,6 +1217,20 @@ const AdminPanel = () => {
             <div className='bg-white rounded-lg shadow-sm border p-6'>
               <h2 className='text-lg font-semibold text-gray-900 mb-4'>Add New Lesson</h2>
               <form onSubmit={handleLessonSubmit} className='space-y-4'>
+                {editingLesson && (
+                  <div className='bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4'>
+                    <p className='text-sm text-blue-800'>
+                      <strong>Editing:</strong> {editingLesson.name}
+                    </p>
+                    <button
+                      type='button'
+                      onClick={cancelEditLesson}
+                      className='text-blue-600 hover:text-blue-800 text-sm mt-1'
+                    >
+                      Cancel Edit
+                    </button>
+                  </div>
+                )}
                 <div>
                   <label className='block text-sm font-medium text-gray-700 mb-1'>Subject</label>
                   <select
@@ -1040,7 +1281,7 @@ const AdminPanel = () => {
                   disabled={loading}
                   className='w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white py-2 rounded-lg font-medium'
                 >
-                  {loading ? 'Creating...' : 'Create Lesson'}
+                  {loading ? (editingLesson ? 'Updating...' : 'Creating...') : (editingLesson ? 'Update Lesson' : 'Create Lesson')}
                 </button>
               </form>
             </div>
@@ -1064,12 +1305,20 @@ const AdminPanel = () => {
                               <div className='text-xs text-gray-500'>{lesson.description}</div>
                             )}
                           </div>
-                          <button
-                            onClick={() => deleteLesson(lesson._id)}
-                            className='text-red-600 hover:text-red-800 text-xs'
-                          >
-                            Delete
-                          </button>
+                          <div className='flex space-x-2'>
+                            <button
+                              onClick={() => editLesson(lesson)}
+                              className='text-blue-600 hover:text-blue-800 text-xs'
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => deleteLesson(lesson._id)}
+                              className='text-red-600 hover:text-red-800 text-xs'
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </div>
                       )) : (
                         <div className='text-sm text-gray-500 p-2'>No lessons found for this subject</div>

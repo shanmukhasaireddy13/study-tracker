@@ -3,8 +3,9 @@ import axios from 'axios'
 import { AppContent } from '../context/AppContexts'
 import { getPhotoUrl } from '../utils/fileUpload'
 import { formatIndianDate, formatIndianDateTime } from '../utils/timezone'
+import DocumentViewer from './DocumentViewer'
 
-const ProgressDashboard = () => {
+const ProgressDashboard = ({ studentId = null, showHeader = true }) => {
   const { backendUrl } = useContext(AppContent)
   const [stats, setStats] = useState(null)
   const [subjects, setSubjects] = useState([])
@@ -14,10 +15,14 @@ const ProgressDashboard = () => {
   const [selectedLesson, setSelectedLesson] = useState(null)
   const [selectedEntry, setSelectedEntry] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [viewingDocument, setViewingDocument] = useState(null)
 
   const loadStats = async () => {
     try {
-      const { data } = await axios.get(backendUrl + '/api/v1/study/stats')
+      const url = studentId 
+        ? `${backendUrl}/api/v1/study/stats/admin?studentId=${studentId}`
+        : `${backendUrl}/api/v1/study/stats`
+      const { data } = await axios.get(url)
       if (data.success) {
         setStats(data.data)
       }
@@ -50,8 +55,12 @@ const ProgressDashboard = () => {
 
   const loadEntries = async (lessonId) => {
     try {
-      const { data } = await axios.get(`${backendUrl}/api/v1/study?lesson=${lessonId}`)
+      const url = studentId 
+        ? `${backendUrl}/api/v1/study?lesson=${lessonId}&studentId=${studentId}`
+        : `${backendUrl}/api/v1/study?lesson=${lessonId}`
+      const { data } = await axios.get(url)
       if (data.success) {
+        // Get ALL entries without any date restrictions
         // Sort entries by date (newest first)
         const sortedEntries = data.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         setEntries(sortedEntries)
@@ -124,9 +133,11 @@ const ProgressDashboard = () => {
   return (
     <div className='bg-white rounded-lg border'>
       {/* Header */}
-      <div className='px-4 py-3 border-b'>
-        <h3 className='text-lg font-semibold text-gray-900'>Progress Dashboard</h3>
-      </div>
+      {showHeader && (
+        <div className='px-4 py-3 border-b'>
+          <h3 className='text-lg font-semibold text-gray-900'>Progress Dashboard</h3>
+        </div>
+      )}
 
       <div className='p-4'>
         {/* Overall Stats */}
@@ -259,18 +270,7 @@ const ProgressDashboard = () => {
                 <h4 className='text-sm font-medium text-gray-900 mb-2'>Entry Details</h4>
                 {selectedEntry ? (
                   <div className='space-y-3 max-h-64 overflow-y-auto'>
-                    {/* Debug Info */}
-                    <div className='text-xs text-gray-500 p-2 bg-gray-100 rounded mb-2'>
-                      <div>Entry ID: {selectedEntry._id}</div>
-                      <div>Subject: {selectedEntry.subject?.name}</div>
-                      <div>Lesson: {selectedEntry.lesson?.name}</div>
-                      <div>Grammar Photos: {selectedEntry.grammar?.photos?.length || 0}</div>
-                      <div>Writing Photos: {selectedEntry.writing?.photos?.length || 0}</div>
-                      <div>Math Photos: {selectedEntry.mathPractice?.photos?.length || 0}</div>
-                      <div>Science Photos: {selectedEntry.sciencePractice?.photos?.length || 0}</div>
-                      <div>Social Photos: {selectedEntry.socialPractice?.photos?.length || 0}</div>
-                    </div>
-                {/* Basic Info */}
+                    {/* Basic Info */}
                 <div className='space-y-2 text-sm'>
                   <div className='flex justify-between'>
                     <span className='text-gray-500'>Date:</span>
@@ -311,33 +311,58 @@ const ProgressDashboard = () => {
                         {selectedEntry.grammar.topic && (
                           <div className='text-xs text-gray-600 mt-1'>Topic: {selectedEntry.grammar.topic}</div>
                         )}
-                        {selectedEntry.grammar.photos?.length > 0 && (
+                        {(selectedEntry.grammar.photos?.length > 0 || selectedEntry.grammar.documents?.length > 0) && (
                           <div className='text-xs text-gray-600 mt-1'>
-                            Photos: {selectedEntry.grammar.photos.length}
+                            Files: {(selectedEntry.grammar.photos?.length || 0) + (selectedEntry.grammar.documents?.length || 0)}
                           </div>
                         )}
-                        {/* Display Grammar Photos */}
-                        {selectedEntry.grammar.photos?.length > 0 && (
+                        {/* Display Grammar Files */}
+                        {(selectedEntry.grammar.photos?.length > 0 || selectedEntry.grammar.documents?.length > 0) && (
                           <div className='mt-2 space-y-2'>
-                            <div className='text-xs font-medium text-gray-700'>Uploaded Photos:</div>
+                            <div className='text-xs font-medium text-gray-700'>Uploaded Files:</div>
                             <div className='space-y-1'>
-                              {selectedEntry.grammar.photos.map((photo, index) => {
+                              {/* Photos */}
+                              {selectedEntry.grammar.photos?.map((photo, index) => {
                                 const photoUrl = getPhotoUrl(photo, backendUrl)
                                 return (
                                   <button
-                                    key={index}
+                                    key={`photo-${index}`}
                                     onClick={() => {
                                       window.open(photoUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes')
                                     }}
                                     className='w-full flex items-center justify-between p-2 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors'
                                   >
                                     <div className='flex items-center space-x-2'>
-                                      <span className='text-blue-600'>📷</span>
+                                      <span className='text-blue-600'>🖼️</span>
                                       <span className='text-sm font-medium text-blue-900'>
-                                        Grammar Photo {index + 1}
+                                        Image {index + 1}
                                       </span>
                                     </div>
                                     <span className='text-xs text-blue-600'>View</span>
+                                  </button>
+                                )
+                              })}
+                              {/* Documents */}
+                              {selectedEntry.grammar.documents?.map((doc, index) => {
+                                const docUrl = getPhotoUrl(doc.path, backendUrl)
+                                return (
+                                  <button
+                                    key={`doc-${index}`}
+                                    onClick={() => {
+                                      setViewingDocument({
+                                        url: docUrl,
+                                        name: doc.originalName || `Document ${index + 1}`
+                                      })
+                                    }}
+                                    className='w-full flex items-center justify-between p-2 bg-green-50 hover:bg-green-100 rounded border border-green-200 transition-colors'
+                                  >
+                                    <div className='flex items-center space-x-2'>
+                                      <span className='text-green-600'>📄</span>
+                                      <span className='text-sm font-medium text-green-900'>
+                                        {doc.originalName || `Document ${index + 1}`}
+                                      </span>
+                                    </div>
+                                    <span className='text-xs text-green-600'>View</span>
                                   </button>
                                 )
                               })}
@@ -358,28 +383,53 @@ const ProgressDashboard = () => {
                             Photos: {selectedEntry.writing.photos.length}
                           </div>
                         )}
-                        {/* Display Writing Photos */}
-                        {selectedEntry.writing.photos?.length > 0 && (
+                        {/* Display Writing Files */}
+                        {(selectedEntry.writing.photos?.length > 0 || selectedEntry.writing.documents?.length > 0) && (
                           <div className='mt-2 space-y-2'>
-                            <div className='text-xs font-medium text-gray-700'>Uploaded Photos:</div>
+                            <div className='text-xs font-medium text-gray-700'>Uploaded Files:</div>
                             <div className='space-y-1'>
-                              {selectedEntry.writing.photos.map((photo, index) => {
+                              {/* Photos */}
+                              {selectedEntry.writing.photos?.map((photo, index) => {
                                 const photoUrl = getPhotoUrl(photo, backendUrl)
                                 return (
                                   <button
-                                    key={index}
+                                    key={`photo-${index}`}
                                     onClick={() => {
                                       window.open(photoUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes')
                                     }}
                                     className='w-full flex items-center justify-between p-2 bg-yellow-50 hover:bg-yellow-100 rounded border border-yellow-200 transition-colors'
                                   >
                                     <div className='flex items-center space-x-2'>
-                                      <span className='text-yellow-600'>📷</span>
+                                      <span className='text-yellow-600'>🖼️</span>
                                       <span className='text-sm font-medium text-yellow-900'>
-                                        Writing Photo {index + 1}
+                                        Image {index + 1}
                                       </span>
                                     </div>
                                     <span className='text-xs text-yellow-600'>View</span>
+                                  </button>
+                                )
+                              })}
+                              {/* Documents */}
+                              {selectedEntry.writing.documents?.map((doc, index) => {
+                                const docUrl = getPhotoUrl(doc.path, backendUrl)
+                                return (
+                                  <button
+                                    key={`doc-${index}`}
+                                    onClick={() => {
+                                      setViewingDocument({
+                                        url: docUrl,
+                                        name: doc.originalName || `Document ${index + 1}`
+                                      })
+                                    }}
+                                    className='w-full flex items-center justify-between p-2 bg-green-50 hover:bg-green-100 rounded border border-green-200 transition-colors'
+                                  >
+                                    <div className='flex items-center space-x-2'>
+                                      <span className='text-green-600'>📄</span>
+                                      <span className='text-sm font-medium text-green-900'>
+                                        {doc.originalName || `Document ${index + 1}`}
+                                      </span>
+                                    </div>
+                                    <span className='text-xs text-green-600'>View</span>
                                   </button>
                                 )
                               })}
@@ -402,28 +452,53 @@ const ProgressDashboard = () => {
                             Photos: {selectedEntry.mathPractice.photos.length}
                           </div>
                         )}
-                        {/* Display Math Photos */}
-                        {selectedEntry.mathPractice.photos?.length > 0 && (
+                        {/* Display Math Files */}
+                        {(selectedEntry.mathPractice.photos?.length > 0 || selectedEntry.mathPractice.documents?.length > 0) && (
                           <div className='mt-2 space-y-2'>
-                            <div className='text-xs font-medium text-gray-700'>Uploaded Photos:</div>
+                            <div className='text-xs font-medium text-gray-700'>Uploaded Files:</div>
                             <div className='space-y-1'>
-                              {selectedEntry.mathPractice.photos.map((photo, index) => {
+                              {/* Photos */}
+                              {selectedEntry.mathPractice.photos?.map((photo, index) => {
                                 const photoUrl = getPhotoUrl(photo, backendUrl)
                                 return (
                                   <button
-                                    key={index}
+                                    key={`photo-${index}`}
                                     onClick={() => {
                                       window.open(photoUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes')
                                     }}
                                     className='w-full flex items-center justify-between p-2 bg-purple-50 hover:bg-purple-100 rounded border border-purple-200 transition-colors'
                                   >
                                     <div className='flex items-center space-x-2'>
-                                      <span className='text-purple-600'>📷</span>
+                                      <span className='text-purple-600'>🖼️</span>
                                       <span className='text-sm font-medium text-purple-900'>
-                                        Math Photo {index + 1}
+                                        Image {index + 1}
                                       </span>
                                     </div>
                                     <span className='text-xs text-purple-600'>View</span>
+                                  </button>
+                                )
+                              })}
+                              {/* Documents */}
+                              {selectedEntry.mathPractice.documents?.map((doc, index) => {
+                                const docUrl = getPhotoUrl(doc.path, backendUrl)
+                                return (
+                                  <button
+                                    key={`doc-${index}`}
+                                    onClick={() => {
+                                      setViewingDocument({
+                                        url: docUrl,
+                                        name: doc.originalName || `Document ${index + 1}`
+                                      })
+                                    }}
+                                    className='w-full flex items-center justify-between p-2 bg-green-50 hover:bg-green-100 rounded border border-green-200 transition-colors'
+                                  >
+                                    <div className='flex items-center space-x-2'>
+                                      <span className='text-green-600'>📄</span>
+                                      <span className='text-sm font-medium text-green-900'>
+                                        {doc.originalName || `Document ${index + 1}`}
+                                      </span>
+                                    </div>
+                                    <span className='text-xs text-green-600'>View</span>
                                   </button>
                                 )
                               })}
@@ -444,28 +519,53 @@ const ProgressDashboard = () => {
                             Photos: {selectedEntry.sciencePractice.photos.length}
                           </div>
                         )}
-                        {/* Display Science Photos */}
-                        {selectedEntry.sciencePractice.photos?.length > 0 && (
+                        {/* Display Science Files */}
+                        {(selectedEntry.sciencePractice.photos?.length > 0 || selectedEntry.sciencePractice.documents?.length > 0) && (
                           <div className='mt-2 space-y-2'>
-                            <div className='text-xs font-medium text-gray-700'>Uploaded Photos:</div>
+                            <div className='text-xs font-medium text-gray-700'>Uploaded Files:</div>
                             <div className='space-y-1'>
-                              {selectedEntry.sciencePractice.photos.map((photo, index) => {
+                              {/* Photos */}
+                              {selectedEntry.sciencePractice.photos?.map((photo, index) => {
                                 const photoUrl = getPhotoUrl(photo, backendUrl)
                                 return (
                                   <button
-                                    key={index}
+                                    key={`photo-${index}`}
                                     onClick={() => {
                                       window.open(photoUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes')
                                     }}
                                     className='w-full flex items-center justify-between p-2 bg-orange-50 hover:bg-orange-100 rounded border border-orange-200 transition-colors'
                                   >
                                     <div className='flex items-center space-x-2'>
-                                      <span className='text-orange-600'>📷</span>
+                                      <span className='text-orange-600'>🖼️</span>
                                       <span className='text-sm font-medium text-orange-900'>
-                                        Science Photo {index + 1}
+                                        Image {index + 1}
                                       </span>
                                     </div>
                                     <span className='text-xs text-orange-600'>View</span>
+                                  </button>
+                                )
+                              })}
+                              {/* Documents */}
+                              {selectedEntry.sciencePractice.documents?.map((doc, index) => {
+                                const docUrl = getPhotoUrl(doc.path, backendUrl)
+                                return (
+                                  <button
+                                    key={`doc-${index}`}
+                                    onClick={() => {
+                                      setViewingDocument({
+                                        url: docUrl,
+                                        name: doc.originalName || `Document ${index + 1}`
+                                      })
+                                    }}
+                                    className='w-full flex items-center justify-between p-2 bg-green-50 hover:bg-green-100 rounded border border-green-200 transition-colors'
+                                  >
+                                    <div className='flex items-center space-x-2'>
+                                      <span className='text-green-600'>📄</span>
+                                      <span className='text-sm font-medium text-green-900'>
+                                        {doc.originalName || `Document ${index + 1}`}
+                                      </span>
+                                    </div>
+                                    <span className='text-xs text-green-600'>View</span>
                                   </button>
                                 )
                               })}
@@ -488,28 +588,53 @@ const ProgressDashboard = () => {
                             Photos: {selectedEntry.socialPractice.photos.length}
                           </div>
                         )}
-                        {/* Display Social Photos */}
-                        {selectedEntry.socialPractice.photos?.length > 0 && (
+                        {/* Display Social Files */}
+                        {(selectedEntry.socialPractice.photos?.length > 0 || selectedEntry.socialPractice.documents?.length > 0) && (
                           <div className='mt-2 space-y-2'>
-                            <div className='text-xs font-medium text-gray-700'>Uploaded Photos:</div>
+                            <div className='text-xs font-medium text-gray-700'>Uploaded Files:</div>
                             <div className='space-y-1'>
-                              {selectedEntry.socialPractice.photos.map((photo, index) => {
+                              {/* Photos */}
+                              {selectedEntry.socialPractice.photos?.map((photo, index) => {
                                 const photoUrl = getPhotoUrl(photo, backendUrl)
                                 return (
                                   <button
-                                    key={index}
+                                    key={`photo-${index}`}
                                     onClick={() => {
                                       window.open(photoUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes')
                                     }}
                                     className='w-full flex items-center justify-between p-2 bg-indigo-50 hover:bg-indigo-100 rounded border border-indigo-200 transition-colors'
                                   >
                                     <div className='flex items-center space-x-2'>
-                                      <span className='text-indigo-600'>📷</span>
+                                      <span className='text-indigo-600'>🖼️</span>
                                       <span className='text-sm font-medium text-indigo-900'>
-                                        Social Photo {index + 1}
+                                        Image {index + 1}
                                       </span>
                                     </div>
                                     <span className='text-xs text-indigo-600'>View</span>
+                                  </button>
+                                )
+                              })}
+                              {/* Documents */}
+                              {selectedEntry.socialPractice.documents?.map((doc, index) => {
+                                const docUrl = getPhotoUrl(doc.path, backendUrl)
+                                return (
+                                  <button
+                                    key={`doc-${index}`}
+                                    onClick={() => {
+                                      setViewingDocument({
+                                        url: docUrl,
+                                        name: doc.originalName || `Document ${index + 1}`
+                                      })
+                                    }}
+                                    className='w-full flex items-center justify-between p-2 bg-green-50 hover:bg-green-100 rounded border border-green-200 transition-colors'
+                                  >
+                                    <div className='flex items-center space-x-2'>
+                                      <span className='text-green-600'>📄</span>
+                                      <span className='text-sm font-medium text-green-900'>
+                                        {doc.originalName || `Document ${index + 1}`}
+                                      </span>
+                                    </div>
+                                    <span className='text-xs text-green-600'>View</span>
                                   </button>
                                 )
                               })}
@@ -530,6 +655,15 @@ const ProgressDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Document Viewer Modal */}
+      {viewingDocument && (
+        <DocumentViewer
+          documentUrl={viewingDocument.url}
+          documentName={viewingDocument.name}
+          onClose={() => setViewingDocument(null)}
+        />
+      )}
     </div>
   )
 }

@@ -106,10 +106,11 @@ export const createStudyEntry = async (req, res) => {
 // Get study entries for a student
 export const getStudyEntries = async (req, res) => {
     try {
-        const { subject, lesson, date } = req.query;
-        const query = { student: req.user.id };
+        const { subject, lesson, date, studentId } = req.query;
+        const studentIdToUse = studentId || req.user.id;
+        const query = { student: studentIdToUse };
         
-        console.log('Getting study entries for student:', req.user.id, 'query:', req.query);
+        console.log('Getting study entries for student:', studentIdToUse, 'query:', req.query);
 
         if (subject) query.subject = subject;
         if (lesson) query.lesson = lesson;

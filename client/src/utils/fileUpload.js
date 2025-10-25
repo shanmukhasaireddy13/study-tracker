@@ -59,15 +59,24 @@ export const getPhotoUrl = (photoPath, backendUrl) => {
 
 // Validate file before upload
 export const validateFile = (file) => {
-  const maxSize = 5 * 1024 * 1024; // 5MB
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  const maxSize = 10 * 1024 * 1024; // 10MB
+  const allowedTypes = [
+    'image/jpeg', 
+    'image/jpg', 
+    'image/png', 
+    'image/gif', 
+    'image/webp',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ];
   
   if (file.size > maxSize) {
-    throw new Error(`File ${file.name} is too large. Maximum size is 5MB.`);
+    throw new Error(`File ${file.name} is too large. Maximum size is 10MB.`);
   }
   
   if (!allowedTypes.includes(file.type)) {
-    throw new Error(`File ${file.name} is not a supported image type.`);
+    throw new Error(`File ${file.name} is not a supported file type. Only images, PDFs, and Word documents are allowed.`);
   }
   
   return true;
@@ -75,7 +84,7 @@ export const validateFile = (file) => {
 
 // Validate multiple files
 export const validateFiles = (files) => {
-  const maxFiles = 10;
+  const maxFiles = 20;
   
   if (files.length > maxFiles) {
     throw new Error(`Too many files. Maximum is ${maxFiles} files.`);
@@ -86,4 +95,25 @@ export const validateFiles = (files) => {
   });
   
   return true;
+};
+
+// Get file type icon
+export const getFileTypeIcon = (fileType) => {
+  if (fileType.startsWith('image/')) {
+    return '🖼️';
+  } else if (fileType === 'application/pdf') {
+    return '📄';
+  } else if (fileType.includes('word')) {
+    return '📝';
+  }
+  return '📎';
+};
+
+// Format file size
+export const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };

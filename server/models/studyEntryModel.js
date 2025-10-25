@@ -12,11 +12,17 @@ const studyEntrySchema = new mongoose.Schema({
         notes: { type: String } // Any notes about the reading
     },
     
-    // Grammar practice (only for Telugu, Hindi, English)
+    // Grammar practice (for language subjects)
     grammar: {
         completed: { type: Boolean, default: false },
         topic: { type: String }, // Grammar topic practiced
         photos: [{ type: String }], // URLs to uploaded photos
+        documents: [{ 
+            path: { type: String },
+            originalName: { type: String },
+            type: { type: String },
+            size: { type: Number }
+        }], // Uploaded documents (PDFs, Word docs)
         notes: { type: String }
     },
     
@@ -30,32 +36,56 @@ const studyEntrySchema = new mongoose.Schema({
         },
         topic: { type: String }, // Writing topic
         photos: [{ type: String }], // URLs to uploaded photos of written work
+        documents: [{ 
+            path: { type: String },
+            originalName: { type: String },
+            type: { type: String },
+            size: { type: Number }
+        }], // Uploaded documents (PDFs, Word docs)
         notes: { type: String }
     },
     
-    // Math-specific fields (for Physical Science)
+    // Math-specific fields (for math subjects)
     mathPractice: {
         completed: { type: Boolean, default: false },
         formulas: [{ type: String }], // Formulas practiced
         problemsSolved: { type: Number, default: 0 },
         photos: [{ type: String }], // Photos of solved problems
+        documents: [{ 
+            path: { type: String },
+            originalName: { type: String },
+            type: { type: String },
+            size: { type: Number }
+        }], // Uploaded documents (PDFs, Word docs)
         notes: { type: String }
     },
     
-    // Science-specific fields (Biology & Physical Science)
+    // Science-specific fields (for science subjects)
     sciencePractice: {
         completed: { type: Boolean, default: false },
         diagrams: { type: Boolean, default: false }, // Whether diagrams were drawn
         questionsAnswered: { type: Number, default: 0 },
         photos: [{ type: String }], // Photos of diagrams/questions
+        documents: [{ 
+            path: { type: String },
+            originalName: { type: String },
+            type: { type: String },
+            size: { type: Number }
+        }], // Uploaded documents (PDFs, Word docs)
         notes: { type: String }
     },
     
-    // Social Studies specific
+    // Social Studies specific (for social subjects)
     socialPractice: {
         completed: { type: Boolean, default: false },
         questionsAnswered: { type: Number, default: 0 },
         photos: [{ type: String }], // Photos of answered questions
+        documents: [{ 
+            path: { type: String },
+            originalName: { type: String },
+            type: { type: String },
+            size: { type: Number }
+        }], // Uploaded documents (PDFs, Word docs)
         notes: { type: String }
     },
     

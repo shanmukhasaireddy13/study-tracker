@@ -5,7 +5,12 @@ const subjectSchema = new mongoose.Schema({
     totalMarks: { type: Number, required: true },
     color: { type: String, default: '#3B82F6' }, // Default blue color for UI
     icon: { type: String, default: '📚' }, // Default book emoji
-    description: { type: String, default: '' }
+    description: { type: String, default: '' },
+    type: { 
+        type: String, 
+        enum: ['language', 'maths', 'science', 'social', 'general'], 
+        default: 'general' 
+    }
 }, { timestamps: true });
 
 const subjectModel = mongoose.models.subject || mongoose.model('subject', subjectSchema);
