@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useState, useMemo, useCallback } from 'react'
 import axios from 'axios'
 import { AppContent } from '../context/AppContexts'
+import { useDataCache } from '../context/DataCacheContext'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import ProgressDashboard from '../components/ProgressDashboard'
@@ -11,6 +12,7 @@ import StreakDashboard from '../components/StreakDashboard'
 const StudyTracker = () => {
   const navigate = useNavigate()
   const { backendUrl, userData, isLoggedin, authChecked, setIsLoggedin, setUserData } = useContext(AppContent)
+  const { fetchSubjects, fetchStudyEntries, fetchStats, invalidateCache } = useDataCache()
   const [subjects, setSubjects] = useState([])
   const [studyEntries, setStudyEntries] = useState([])
   const [showAddForm, setShowAddForm] = useState(false)
@@ -18,27 +20,27 @@ const StudyTracker = () => {
   const [filterSubject, setFilterSubject] = useState('')
   const [filterDate, setFilterDate] = useState('')
   const [activeTab, setActiveTab] = useState('tracker')
+  const [loading, setLoading] = useState(false)
 
-  const loadSubjects = useCallback(async () => {
+  const loadSubjects = useCallback(async (forceRefresh = false) => {
     try {
-      const { data } = await axios.get(backendUrl + '/api/v1/subjects')
-      if (data.success) {
-        setSubjects(data.data)
-        if (data.data.length === 0) {
-          // Initialize default subjects if none exist
-          await initializeSubjects()
-        }
+      const { data, fromCache } = await fetchSubjects(forceRefresh)
+      setSubjects(data)
+      if (data.length === 0 && !fromCache) {
+        await initializeSubjects()
       }
     } catch (error) {
       toast.error('Failed to load subjects')
     }
-  }, [backendUrl])
+  }, [fetchSubjects])
 
   const initializeSubjects = async () => {
     try {
       const { data } = await axios.get(backendUrl + '/api/v1/subjects/init')
       if (data.success) {
         setSubjects(data.data)
+        // Invalidate subjects cache to get fresh data
+        invalidateCache('subjects')
         toast.success('Subjects initialized successfully!')
       }
     } catch (error) {
@@ -46,34 +48,33 @@ const StudyTracker = () => {
     }
   }
 
-  const loadStudyEntries = async () => {
+  const loadStudyEntries = useCallback(async (forceRefresh = false) => {
     try {
-      let url = backendUrl + '/api/v1/study'
-      const params = new URLSearchParams()
-      if (filterSubject) params.append('subject', filterSubject)
-      if (filterDate) params.append('date', filterDate)
-      if (params.toString()) url += '?' + params.toString()
-
-      const { data } = await axios.get(url)
-      if (data.success) {
-        setStudyEntries(data.data)
-      }
+      setLoading(true)
+      const params = {}
+      if (filterSubject) params.subject = filterSubject
+      if (filterDate) params.date = filterDate
+      
+      const { data } = await fetchStudyEntries(params, forceRefresh)
+      setStudyEntries(data)
     } catch (error) {
       toast.error('Failed to load study entries')
+    } finally {
+      setLoading(false)
     }
-  }
+  }, [fetchStudyEntries, filterSubject, filterDate])
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async (forceRefresh = false) => {
     try {
-      const { data } = await axios.get(backendUrl + '/api/v1/study/stats')
-      if (data.success) {
-        setStats(data.data)
-      }
+      const params = { period: 'all' }
+      if (filterSubject) params.subject = filterSubject
+      
+      const { data } = await fetchStats(params, forceRefresh)
+      setStats(data)
     } catch (error) {
-      console.error('Failed to load statistics:', error)
       toast.error('Failed to load statistics')
     }
-  }
+  }, [fetchStats, filterSubject])
 
   const deleteStudyEntry = async (id) => {
     if (window.confirm('Are you sure you want to delete this study entry?')) {
@@ -81,8 +82,10 @@ const StudyTracker = () => {
         const { data } = await axios.delete(backendUrl + '/api/v1/study/' + id)
         if (data.success) {
           toast.success('Study entry deleted successfully!')
-          loadStudyEntries()
-          loadStats()
+          // Invalidate related caches
+          invalidateCache(['studyEntries', 'stats', 'revisionPlan'])
+          loadStudyEntries(true)
+          loadStats(true)
         }
       } catch (error) {
         toast.error('Failed to delete study entry')
@@ -91,8 +94,10 @@ const StudyTracker = () => {
   }
 
   const handleFormSuccess = () => {
-    loadStudyEntries()
-    loadStats()
+    // Invalidate related caches
+    invalidateCache(['studyEntries', 'stats', 'revisionPlan'])
+    loadStudyEntries(true)
+    loadStats(true)
     // Show success message and close form
     toast.success('Study entry saved! Your progress has been updated.')
   }
@@ -133,11 +138,15 @@ const StudyTracker = () => {
     loadSubjects()
     loadStudyEntries()
     loadStats()
-  }, [authChecked, isLoggedin])
+  }, [authChecked, isLoggedin, loadSubjects, loadStudyEntries, loadStats])
 
   useEffect(() => {
     loadStudyEntries()
-  }, [filterSubject, filterDate])
+  }, [filterSubject, filterDate, loadStudyEntries])
+
+  useEffect(() => {
+    loadStats()
+  }, [filterSubject, loadStats])
 
   if (!authChecked || !isLoggedin) {
     return <div className="p-6 text-center">Loading...</div>

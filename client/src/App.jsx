@@ -5,6 +5,7 @@ import Navigation from './components/Navigation'
 import { ToastContainer } from 'react-toastify';
 import ProtectedRoute from './components/ProtectedRoute'
 import { AppContent } from './context/AppContexts'
+import { DataCacheProvider } from './context/DataCacheContext'
 
 // Lazy load heavy components for better performance
 const StudyTracker = lazy(() => import('./pages/StudyTracker'))
@@ -13,7 +14,7 @@ const AdminSetup = lazy(() => import('./pages/AdminSetup'))
 
 
 const App = () => {
-  const { userData, isLoggedin, authChecked } = useContext(AppContent)
+  const { userData, isLoggedin, authChecked, backendUrl } = useContext(AppContent)
   
   const AdminOnlyRoute = ({ children }) => {
     if (!authChecked) {
@@ -86,31 +87,33 @@ const App = () => {
   }
 
   return (
-    <div>
-      <ToastContainer/>
-      <Routes>
-        <Route path='/' element={
-          <ProtectedRoute>
-            <HomeComponent />
-          </ProtectedRoute>
-        }/>
-        <Route path='/setup' element={
-          <ProtectedRoute>
-            <AdminOnlyRoute>
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-4xl mb-4">⏳</div>
-                  <h1 className="text-2xl font-bold text-gray-900">Loading Setup...</h1>
-                </div>
-              </div>}>
-                <AdminSetup/>
-              </Suspense>
-            </AdminOnlyRoute>
-          </ProtectedRoute>
-        }/>
-        <Route path='/login' element={<Login/>}/>
-      </Routes>
-    </div>
+    <DataCacheProvider backendUrl={backendUrl}>
+      <div>
+        <ToastContainer/>
+        <Routes>
+          <Route path='/' element={
+            <ProtectedRoute>
+              <HomeComponent />
+            </ProtectedRoute>
+          }/>
+          <Route path='/setup' element={
+            <ProtectedRoute>
+              <AdminOnlyRoute>
+                <Suspense fallback={<div className="min-h-screen flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-4xl mb-4">⏳</div>
+                    <h1 className="text-2xl font-bold text-gray-900">Loading Setup...</h1>
+                  </div>
+                </div>}>
+                  <AdminSetup/>
+                </Suspense>
+              </AdminOnlyRoute>
+            </ProtectedRoute>
+          }/>
+          <Route path='/login' element={<Login/>}/>
+        </Routes>
+      </div>
+    </DataCacheProvider>
   )
 }
 

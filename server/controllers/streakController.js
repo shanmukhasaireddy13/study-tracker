@@ -95,6 +95,27 @@ export const updateStreak = async (req, res) => {
     }
 };
 
+// Helper to update streak without Express res dependency (used internally)
+export const updateStreakForUser = async (userId, studyEntry) => {
+    // Reuse the same logic as the handler but without res
+    const dateStr = getIndianDateString();
+    const streak = await streakModel.findOne({ user: userId });
+    if (!streak) {
+        await calculateStreak(userId);
+    } else {
+        const existingCalendarEntry = streak.studyCalendar.find(entry => 
+            getIndianDateString(entry.date) === dateStr
+        );
+        if (!existingCalendarEntry) {
+            await calculateStreak(userId);
+        }
+    }
+
+    await updateStudyCalendar(userId, studyEntry);
+    await updateProgress(userId, studyEntry);
+    await checkAchievements(userId);
+};
+
 // Get revision recommendations
 export const getRevisionPlan = async (req, res) => {
     try {

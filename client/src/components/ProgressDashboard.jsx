@@ -1,12 +1,14 @@
-import React, { useContext, useEffect, useState } from 'react'
+import React, { useContext, useEffect, useState, useCallback } from 'react'
 import axios from 'axios'
 import { AppContent } from '../context/AppContexts'
+import { useDataCache } from '../context/DataCacheContext'
 import { getPhotoUrl } from '../utils/fileUpload'
 import { formatIndianDate, formatIndianDateTime } from '../utils/timezone'
 import DocumentViewer from './DocumentViewer'
 
 const ProgressDashboard = ({ studentId = null, showHeader = true }) => {
   const { backendUrl } = useContext(AppContent)
+  const { fetchSubjects, fetchStudyEntries, fetchStats, fetchLessons } = useDataCache()
   const [stats, setStats] = useState(null)
   const [subjects, setSubjects] = useState([])
   const [lessons, setLessons] = useState([])
@@ -17,58 +19,69 @@ const ProgressDashboard = ({ studentId = null, showHeader = true }) => {
   const [loading, setLoading] = useState(true)
   const [viewingDocument, setViewingDocument] = useState(null)
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async (forceRefresh = false) => {
     try {
-      const url = studentId 
-        ? `${backendUrl}/api/v1/study/stats/admin?studentId=${studentId}`
-        : `${backendUrl}/api/v1/study/stats`
-      const { data } = await axios.get(url)
-      if (data.success) {
-        setStats(data.data)
+      if (studentId) {
+        // Admin view - use direct API call
+        const url = `${backendUrl}/api/v1/study/stats/admin?studentId=${studentId}`
+        const { data } = await axios.get(url)
+        if (data.success) {
+          setStats(data.data)
+        }
+      } else {
+        // Student view - use cache
+        const { data } = await fetchStats({ period: 'all' }, forceRefresh)
+        setStats(data)
       }
     } catch (error) {
       console.error('Failed to load statistics:', error)
     }
-  }
+  }, [studentId, backendUrl, fetchStats])
 
-  const loadSubjects = async () => {
+  const loadSubjects = useCallback(async (forceRefresh = false) => {
     try {
-      const { data } = await axios.get(backendUrl + '/api/v1/subjects')
-      if (data.success) {
-        setSubjects(data.data)
-      }
+      const { data } = await fetchSubjects(forceRefresh)
+      setSubjects(data)
     } catch (error) {
       console.error('Failed to load subjects:', error)
+      setSubjects([])
     }
-  }
+  }, [fetchSubjects])
 
-  const loadLessons = async (subjectId) => {
+  const loadLessons = useCallback(async (subjectId, forceRefresh = false) => {
     try {
-      const { data } = await axios.get(`${backendUrl}/api/v1/lessons?subject=${subjectId}`)
-      if (data.success) {
-        setLessons(data.data)
-      }
+      const { data } = await fetchLessons(subjectId, forceRefresh)
+      setLessons(data)
     } catch (error) {
       console.error('Failed to load lessons:', error)
+      setLessons([])
     }
-  }
+  }, [fetchLessons])
 
-  const loadEntries = async (lessonId) => {
+  const loadEntries = useCallback(async (lessonId, forceRefresh = false) => {
     try {
-      const url = studentId 
-        ? `${backendUrl}/api/v1/study?lesson=${lessonId}&studentId=${studentId}`
-        : `${backendUrl}/api/v1/study?lesson=${lessonId}`
-      const { data } = await axios.get(url)
-      if (data.success) {
-        // Get ALL entries without any date restrictions
+      if (studentId) {
+        // Admin view - use direct API call
+        const url = `${backendUrl}/api/v1/study?lesson=${lessonId}&studentId=${studentId}`
+        const { data } = await axios.get(url)
+        if (data.success) {
+          // Get ALL entries without any date restrictions
+          // Sort entries by date (newest first)
+          const sortedEntries = data.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+          setEntries(sortedEntries)
+        }
+      } else {
+        // Student view - use cache
+        const { data } = await fetchStudyEntries({ lesson: lessonId }, forceRefresh)
         // Sort entries by date (newest first)
-        const sortedEntries = data.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        const sortedEntries = data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         setEntries(sortedEntries)
       }
     } catch (error) {
       console.error('Failed to load entries:', error)
+      setEntries([])
     }
-  }
+  }, [studentId, backendUrl, fetchStudyEntries])
 
   useEffect(() => {
     const loadData = async () => {
@@ -77,7 +90,7 @@ const ProgressDashboard = ({ studentId = null, showHeader = true }) => {
       setLoading(false)
     }
     loadData()
-  }, [])
+  }, []) // Remove function dependencies to prevent infinite loops
 
   useEffect(() => {
     if (selectedSubject) {
@@ -85,14 +98,14 @@ const ProgressDashboard = ({ studentId = null, showHeader = true }) => {
       setSelectedLesson(null)
       setSelectedEntry(null)
     }
-  }, [selectedSubject])
+  }, [selectedSubject]) // Remove loadLessons dependency to prevent infinite loops
 
   useEffect(() => {
     if (selectedLesson) {
       loadEntries(selectedLesson)
       setSelectedEntry(null)
     }
-  }, [selectedLesson])
+  }, [selectedLesson]) // Remove loadEntries dependency to prevent infinite loops
 
   const formatDuration = (minutes) => {
     const hours = Math.floor(minutes / 60)

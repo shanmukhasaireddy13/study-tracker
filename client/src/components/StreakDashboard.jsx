@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react'
 import axios from 'axios'
 import { toast } from 'react-toastify'
 import { formatIndianDate, getIndianDateString, isTodayIndian, isYesterdayIndian } from '../utils/timezone'
+import { useDataCache } from '../context/DataCacheContext'
 
 const StreakDashboard = ({ backendUrl }) => {
+  const { fetchStreakData, fetchStudyEntries, fetchRevisionPlan, invalidateCache } = useDataCache()
   const [streakData, setStreakData] = useState(null)
   const [recentEntries, setRecentEntries] = useState([])
   const [revisionPlan, setRevisionPlan] = useState([])
@@ -21,16 +23,10 @@ const StreakDashboard = ({ backendUrl }) => {
     }
   }, [activeSection])
 
-  const loadStreakData = async () => {
+  const loadStreakData = async (forceRefresh = false) => {
     try {
-      // First refresh the streak to ensure it's up to date
-      await axios.post(`${backendUrl}/api/v1/streak/refresh`)
-      
-      // Then get the updated streak data
-      const { data } = await axios.get(`${backendUrl}/api/v1/streak`)
-      if (data.success) {
-        setStreakData(data.data)
-      }
+      const { data } = await fetchStreakData(forceRefresh)
+      setStreakData(data)
     } catch (error) {
       console.error('Failed to load streak data:', error)
       setStreakData({
@@ -42,12 +38,10 @@ const StreakDashboard = ({ backendUrl }) => {
     }
   }
 
-  const loadRecentEntries = async () => {
+  const loadRecentEntries = async (forceRefresh = false) => {
     try {
-      const { data } = await axios.get(`${backendUrl}/api/v1/study?limit=5`)
-      if (data.success) {
-        setRecentEntries(data.data)
-      }
+      const { data } = await fetchStudyEntries({ limit: 5 }, forceRefresh)
+      setRecentEntries(data)
     } catch (error) {
       console.error('Failed to load recent entries:', error)
       setRecentEntries([])
