@@ -19,7 +19,6 @@ import streakRouter from './routes/streakRoutes.js';
 import fileRouter from './routes/fileRoutes.js';
 import swaggerUi from 'swagger-ui-express';
 import apiSpec from './docs/openapi.js';
-import path from 'path';
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -54,9 +53,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-// Serve uploaded files statically (respect UPLOADS_DIR for persistent disk)
-const uploadsDir = process.env.UPLOADS_DIR ? path.resolve(process.env.UPLOADS_DIR) : path.resolve('server/uploads');
-app.use('/uploads', express.static(uploadsDir));
+// Serve uploaded files statically
+app.use('/uploads', express.static('uploads'));
 app.use(cors({
     origin: allowedOrigins,
     credentials: true,

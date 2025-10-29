@@ -1,24 +1,79 @@
 import axios from 'axios';
 
-// Upload photos for a study entry
+// Get ImageKit auth params from backend
+const getImageKitAuth = async (backendUrl) => {
+  const { data } = await axios.post(
+    `${backendUrl}/api/v1/files/imagekit-auth`,
+    {},
+    { withCredentials: true }
+  );
+  if (!data?.success) throw new Error(data?.message || 'Failed to get ImageKit auth');
+  return data.data; // { token, expire, signature, publicKey, urlEndpoint }
+};
+
+// Upload a single file directly to ImageKit
+const uploadSingleToImageKit = async (file, cfg) => {
+  const endpoint = `https://upload.imagekit.io/api/v1/files/upload`;
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('fileName', file.name || 'upload');
+  fd.append('token', cfg.token);
+  fd.append('expire', cfg.expire);
+  fd.append('signature', cfg.signature);
+  fd.append('publicKey', cfg.publicKey);
+  // Optional folder on ImageKit
+  fd.append('folder', '/study_uploads');
+
+  const { data } = await axios.post(endpoint, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000,
+    // Critical: do NOT send cookies to ImageKit to avoid CORS credentials restriction
+    withCredentials: false
+  });
+  return data; // includes url, thumbnailUrl, fileId, name, mime
+};
+
+// Upload photos for a study entry (direct to Cloudinary, then link on server)
 export const uploadStudyPhotos = async (entryId, activityType, files, backendUrl) => {
   try {
-    const formData = new FormData();
-    formData.append('entryId', entryId);
-    formData.append('activityType', activityType);
-    
-    // Add files to FormData
-    Array.from(files).forEach(file => {
-      formData.append('photos', file);
+    // 1) Get ImageKit auth from backend
+    const cfg = await getImageKitAuth(backendUrl);
+
+    // 2) Upload all files directly to ImageKit
+    let uploads;
+    try {
+      uploads = await Promise.all(Array.from(files).map((f) => uploadSingleToImageKit(f, cfg)));
+    } catch (err) {
+      // Network issues when calling Cloudinary directly from browser: fallback to server proxy
+      if (err?.code === 'ERR_NETWORK') {
+        const fd = new FormData();
+        fd.append('entryId', entryId);
+        fd.append('activityType', activityType);
+        Array.from(files).forEach((file) => fd.append('photos', file));
+        const { data } = await axios.post(
+          `${backendUrl}/api/v1/files/study-upload-proxy`,
+          fd,
+          { withCredentials: true, headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }
+        );
+        if (!data?.success) throw new Error(data?.message || 'Proxy upload failed');
+        return data; // already contains images/documents + entry
+      }
+      throw err;
+    }
+
+    // 3) Split into images vs documents by mime
+    const images = [];
+    const documents = [];
+    uploads.forEach((u) => {
+      if (u.mime && u.mime.startsWith('image/')) images.push(u.url); else documents.push(u.url);
     });
 
-    const response = await axios.post(`${backendUrl}/api/v1/files/study-upload`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      withCredentials: true
-    });
-
+    // 4) Link uploaded asset URLs to study entry on backend
+    const response = await axios.post(
+      `${backendUrl}/api/v1/files/study-upload`,
+      { entryId, activityType, images, documents },
+      { withCredentials: true }
+    );
     return response.data;
   } catch (error) {
     console.error('Upload photos error:', error);
@@ -42,18 +97,10 @@ export const getStudyEntryPhotos = async (entryId, backendUrl) => {
 // Get photo URL
 export const getPhotoUrl = (photoPath, backendUrl) => {
   if (!photoPath) return null;
-  
-  // If it's already a full URL, return as is
-  if (photoPath.startsWith('http')) {
-    return photoPath;
-  }
-  
-  // If it starts with /uploads, it's already a relative path
-  if (photoPath.startsWith('/uploads')) {
-    return `${backendUrl}${photoPath}`;
-  }
-  
-  // Otherwise, construct the full URL
+  // Cloudinary URLs (https) are returned as-is
+  if (photoPath.startsWith('http')) return photoPath;
+  // Backwards compatibility: fall back to server uploads path if old data exists
+  if (photoPath.startsWith('/uploads')) return `${backendUrl}${photoPath}`;
   return `${backendUrl}/uploads/${photoPath}`;
 };
 

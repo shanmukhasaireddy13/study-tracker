@@ -399,7 +399,7 @@ const updateProgress = async (userId, studyEntry) => {
 
     if (existingProgress) {
         // Update existing progress
-        existingProgress.lastStudied = today;
+        existingProgress.lastStudied = todayIST;
         existingProgress.studyCount += 1;
         existingProgress.totalTimeSpent += studyEntry.totalTime || 0;
         existingProgress.confidence = studyEntry.confidence || existingProgress.confidence;
@@ -426,14 +426,14 @@ const updateProgress = async (userId, studyEntry) => {
             user: userId,
             subject: studyEntry.subject,
             lesson: studyEntry.lesson,
-            firstStudied: today,
-            lastStudied: today,
+            firstStudied: todayIST,
+            lastStudied: todayIST,
             studyCount: 1,
             masteryLevel: 1,
             confidence: studyEntry.confidence || 3,
             totalTimeSpent: studyEntry.totalTime || 0,
             revisionHistory: [revisionEntry],
-            nextReviewDate: new Date(today.getTime() + 24 * 60 * 60 * 1000) // Next day
+            nextReviewDate: new Date(todayIST.getTime() + 24 * 60 * 60 * 1000) // Next day
         });
     }
 };

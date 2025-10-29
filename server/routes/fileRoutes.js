@@ -1,28 +1,26 @@
 import express from 'express';
 import userAuth from '../middleware/userAuth.js';
-import { uploadMultiple, handleUploadError } from '../middleware/upload.js';
-import { uploadPhotos, getPhoto, deletePhoto, getStudentPhotos } from '../controllers/fileController.js';
-import { uploadStudyPhotos, getStudyEntryPhotos } from '../controllers/photoController.js';
+import multer from 'multer';
+import { getCloudinarySignature, getImageKitAuth } from '../controllers/fileController.js';
+import { uploadStudyPhotos, getStudyEntryPhotos, proxyUploadStudyPhotos } from '../controllers/photoController.js';
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(userAuth);
 
-// Upload photos
-router.post('/upload', uploadMultiple, handleUploadError, uploadPhotos);
+// Cloudinary signed upload - returns signature details
+router.post('/cloudinary-signature', getCloudinarySignature);
 
-// Get photo by filename
-router.get('/photo/:filename', getPhoto);
+// ImageKit auth params for direct upload
+router.post('/imagekit-auth', getImageKitAuth);
 
-// Delete photo
-router.delete('/photo/:filename', deletePhoto);
+// Link already-uploaded Cloudinary assets to a study entry
+router.post('/study-upload', uploadStudyPhotos);
 
-// Get all photos for current student
-router.get('/student-photos', getStudentPhotos);
-
-// Upload photos for study entry
-router.post('/study-upload', uploadMultiple, handleUploadError, uploadStudyPhotos);
+// Fallback: upload files to server, then to Cloudinary, then link (no local storage)
+const memoryUpload = multer({ storage: multer.memoryStorage() }).array('photos', 20);
+router.post('/study-upload-proxy', memoryUpload, proxyUploadStudyPhotos);
 
 // Get photos for specific study entry
 router.get('/study-entry/:entryId/photos', getStudyEntryPhotos);

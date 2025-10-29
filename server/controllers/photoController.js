@@ -1,10 +1,9 @@
 import studyEntryModel from '../models/studyEntryModel.js';
-import { processImages, processMixedFiles } from '../middleware/upload.js';
 
 // Upload photos and update study entry
 export const uploadStudyPhotos = async (req, res) => {
   try {
-    const { entryId, activityType } = req.body;
+    const { entryId, activityType, images = [], documents = [] } = req.body;
     const studentId = req.user.id;
 
     if (!entryId || !activityType) {
@@ -14,12 +13,7 @@ export const uploadStudyPhotos = async (req, res) => {
       });
     }
 
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No files uploaded'
-      });
-    }
+    // Expect Cloudinary URLs already uploaded from client
 
     // Find the study entry
     const studyEntry = await studyEntryModel.findOne({
@@ -34,13 +28,23 @@ export const uploadStudyPhotos = async (req, res) => {
       });
     }
 
-    // Process and save mixed files (images and documents)
-    const { images, documents } = await processMixedFiles(req.files, activityType, studentId);
-
-    // Update the study entry with file paths
+    // Update the study entry with Cloudinary URLs
     const updateData = {};
     updateData[`${activityType}.photos`] = images;
-    updateData[`${activityType}.documents`] = documents;
+    // Documents in schema are objects; accept strings from client and shape here
+    const shapedDocuments = (documents || []).map((doc) => {
+      if (typeof doc === 'string') {
+        return { path: doc };
+      }
+      // If client sends structured objects, trust those fields
+      return {
+        path: doc.path || doc.url || '',
+        originalName: doc.originalName || doc.name || '',
+        type: doc.type || doc.mime || '',
+        size: typeof doc.size === 'number' ? doc.size : undefined
+      };
+    });
+    updateData[`${activityType}.documents`] = shapedDocuments;
     updateData[`${activityType}.completed`] = true;
 
     const updatedEntry = await studyEntryModel.findByIdAndUpdate(
@@ -51,7 +55,7 @@ export const uploadStudyPhotos = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Files uploaded successfully',
+      message: 'Files linked successfully',
       data: {
         entry: updatedEntry,
         images: images,
@@ -65,6 +69,79 @@ export const uploadStudyPhotos = async (req, res) => {
       success: false,
       message: error.message || 'Failed to upload photos'
     });
+  }
+};
+
+// Proxy upload: accept files in request, upload to Cloudinary on server, then link to entry
+export const proxyUploadStudyPhotos = async (req, res) => {
+  try {
+    const { entryId, activityType } = req.body;
+    const studentId = req.user.id;
+
+    if (!entryId || !activityType) {
+      return res.status(400).json({ success: false, message: 'Entry ID and activity type are required' });
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, message: 'No files uploaded' });
+    }
+
+    const studyEntry = await studyEntryModel.findOne({ _id: entryId, student: studentId });
+    if (!studyEntry) {
+      return res.status(404).json({ success: false, message: 'Study entry not found' });
+    }
+
+    const imagekit = (await import('../utils/imagekit.js')).default;
+    const folder = process.env.IMAGEKIT_UPLOAD_FOLDER || '/study_uploads';
+
+    const uploadBuffer = (file) => new Promise((resolve, reject) => {
+      imagekit.upload({
+        file: file.buffer,
+        fileName: file.originalname,
+        folder,
+        useUniqueFileName: true
+      }, (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      });
+    });
+
+    const results = await Promise.all(req.files.map((f) => uploadBuffer(f)));
+
+    const images = [];
+    const documents = [];
+    results.forEach((u) => {
+      if (u.mime && u.mime.startsWith('image/')) {
+        images.push(u.url);
+      } else {
+        documents.push({
+          path: u.url,
+          originalName: u.name,
+          type: u.mime,
+          size: typeof u.size === 'number' ? u.size : undefined
+        });
+      }
+    });
+
+    const updateData = {};
+    updateData[`${activityType}.photos`] = images;
+    updateData[`${activityType}.documents`] = documents;
+    updateData[`${activityType}.completed`] = true;
+
+    const updatedEntry = await studyEntryModel.findByIdAndUpdate(
+      entryId,
+      { $set: updateData },
+      { new: true }
+    ).populate('subject lesson');
+
+    return res.json({
+      success: true,
+      message: 'Files uploaded and linked successfully',
+      data: { entry: updatedEntry, images, documents, totalFiles: images.length + documents.length }
+    });
+  } catch (error) {
+    console.error('Proxy upload error:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Failed to upload files' });
   }
 };
 

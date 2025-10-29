@@ -1,163 +1,81 @@
-import { processImages } from '../middleware/upload.js';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
+import crypto from 'crypto';
+import imagekit from '../utils/imagekit.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Upload photos for study entry
-export const uploadPhotos = async (req, res) => {
+// Generate Cloudinary signature for signed direct uploads from the client
+export const getCloudinarySignature = async (req, res) => {
   try {
-    const { activityType } = req.body;
-    const studentId = req.user.id;
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    const defaultFolder = process.env.CLOUDINARY_UPLOAD_FOLDER || 'study_uploads';
+    const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET || '';
 
-    if (!activityType) {
-      return res.status(400).json({
+    if (!cloudName || !apiKey || !apiSecret) {
+      return res.status(500).json({
         success: false,
-        message: 'Activity type is required'
+        message: 'Cloudinary configuration missing on server'
       });
     }
 
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No files uploaded'
-      });
-    }
+    const { folder } = req.body || {};
+    const timestamp = Math.floor(Date.now() / 1000);
 
-    // Process and save images
-    const imagePaths = await processImages(req.files, activityType, studentId);
+    const paramsToSign = {
+      folder: folder || defaultFolder,
+      timestamp
+    };
 
-    res.json({
+    const toQueryString = Object.keys(paramsToSign)
+      .sort()
+      .map((key) => `${key}=${paramsToSign[key]}`)
+      .join('&');
+
+    const signature = crypto
+      .createHash('sha1')
+      .update(toQueryString + apiSecret)
+      .digest('hex');
+
+    return res.json({
       success: true,
-      message: 'Photos uploaded successfully',
       data: {
-        photos: imagePaths,
-        count: imagePaths.length
+        timestamp,
+        signature,
+        apiKey,
+        cloudName,
+        folder: paramsToSign.folder,
+        uploadPreset
       }
     });
   } catch (error) {
-    console.error('Upload photos error:', error);
-    res.status(500).json({
+    console.error('Cloudinary signature error:', error);
+    return res.status(500).json({
       success: false,
-      message: error.message || 'Failed to upload photos'
+      message: 'Failed to create Cloudinary signature'
     });
   }
 };
 
-// Get photo by filename
-export const getPhoto = async (req, res) => {
+// ImageKit authentication parameters for client-side direct upload
+export const getImageKitAuth = async (req, res) => {
   try {
-    const { filename } = req.params;
-    
-    // Security check - ensure filename is safe
-    if (!filename || filename.includes('..') || filename.includes('/')) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid filename'
-      });
+    const publicKey = process.env.IMAGEKIT_PUBLIC_KEY;
+    const urlEndpoint = process.env.IMAGEKIT_URL_ENDPOINT;
+    if (!publicKey || !urlEndpoint || !process.env.IMAGEKIT_PRIVATE_KEY) {
+      return res.status(500).json({ success: false, message: 'ImageKit configuration missing on server' });
     }
 
-    const filepath = path.join(__dirname, '../uploads', filename);
-    
-    // Check if file exists
-    if (!fs.existsSync(filepath)) {
-      return res.status(404).json({
-        success: false,
-        message: 'Photo not found'
-      });
-    }
-
-    // Set appropriate headers
-    res.setHeader('Content-Type', 'image/webp');
-    res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year cache
-    
-    // Stream the file
-    const fileStream = fs.createReadStream(filepath);
-    fileStream.pipe(res);
-  } catch (error) {
-    console.error('Get photo error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to retrieve photo'
-    });
-  }
-};
-
-// Delete photo
-export const deletePhoto = async (req, res) => {
-  try {
-    const { filename } = req.params;
-    const studentId = req.user.id;
-    
-    // Security check
-    if (!filename || filename.includes('..') || filename.includes('/')) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid filename'
-      });
-    }
-
-    // Check if filename belongs to the student (security)
-    if (!filename.includes(`_${studentId}_`)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
-    }
-
-    const filepath = path.join(__dirname, '../uploads', filename);
-    
-    if (fs.existsSync(filepath)) {
-      fs.unlinkSync(filepath);
-    }
-
-    res.json({
+    const authenticationParameters = imagekit.getAuthenticationParameters();
+    return res.json({
       success: true,
-      message: 'Photo deleted successfully'
+      data: {
+        ...authenticationParameters,
+        publicKey,
+        urlEndpoint
+      }
     });
   } catch (error) {
-    console.error('Delete photo error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete photo'
-    });
+    console.error('ImageKit auth error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to create ImageKit auth' });
   }
 };
 
-// Get all photos for a student
-export const getStudentPhotos = async (req, res) => {
-  try {
-    const studentId = req.user.id;
-    const uploadsDir = path.join(__dirname, '../uploads');
-    
-    if (!fs.existsSync(uploadsDir)) {
-      return res.json({
-        success: true,
-        data: []
-      });
-    }
-
-    const files = fs.readdirSync(uploadsDir);
-    const studentPhotos = files
-      .filter(file => file.includes(`_${studentId}_`))
-      .map(file => ({
-        filename: file,
-        url: `/api/v1/files/photo/${file}`,
-        uploadedAt: fs.statSync(path.join(uploadsDir, file)).mtime
-      }))
-      .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
-
-    res.json({
-      success: true,
-      data: studentPhotos
-    });
-  } catch (error) {
-    console.error('Get student photos error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to retrieve photos'
-    });
-  }
-};

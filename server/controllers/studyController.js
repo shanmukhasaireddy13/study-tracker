@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import studyEntryModel from '../models/studyEntryModel.js';
 import subjectModel from '../models/subjectModel.js';
 import lessonModel from '../models/lessonModel.js';
-import dailyProgressModel from '../models/dailyProgressModel.js';
+import progressModel from '../models/progressModel.js';
 
 // Create a new study entry (simplified form)
 export const createStudyEntry = async (req, res) => {
@@ -76,13 +76,18 @@ export const createStudyEntry = async (req, res) => {
 
         // Update streak data
         try {
-            const { updateStreakForUser } = await import('./streakController.js');
-            await updateStreakForUser(req.user.id, {
-                subject: studyEntry.subject,
-                lesson: studyEntry.lesson,
-                confidence: studyEntry.confidence,
-                totalTime: studyEntry.totalTime
-            });
+            const { updateStreak } = await import('./streakController.js');
+            await updateStreak({ 
+                user: { id: req.user.id }, 
+                body: { 
+                    studyEntry: {
+                        subject: studyEntry.subject,
+                        lesson: studyEntry.lesson,
+                        confidence: studyEntry.confidence,
+                        totalTime: studyEntry.totalTime
+                    }
+                } 
+            }, { json: () => {} });
         } catch (error) {
             console.error('Failed to update streak:', error);
         }
@@ -367,10 +372,18 @@ const updateDailyProgress = async (studentId, subjectId, entry = null) => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        let progress = await dailyProgressModel.findOne({ student: studentId, subject: subjectId, date: today });
+        let progress = await progressModel.findOne({
+            student: studentId,
+            subject: subjectId,
+            date: today
+        });
 
         if (!progress) {
-            progress = new dailyProgressModel({ student: studentId, subject: subjectId, date: today });
+            progress = new progressModel({
+                student: studentId,
+                subject: subjectId,
+                date: today
+            });
         }
 
         // Recalculate daily stats
@@ -380,13 +393,13 @@ const updateDailyProgress = async (studentId, subjectId, entry = null) => {
             date: { $gte: today, $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
         });
 
-        progress.totalStudyTime = dailyEntries.reduce((sum, e) => sum + (e.totalTime || 0), 0);
+        progress.totalStudyTime = dailyEntries.reduce((sum, e) => sum + e.duration, 0);
         progress.entriesCount = dailyEntries.length;
         progress.averageConfidence = dailyEntries.length > 0 
             ? dailyEntries.reduce((sum, e) => sum + e.confidence, 0) / dailyEntries.length 
             : 0;
-        progress.topicsCovered = [...new Set(dailyEntries.map(e => e.topic).filter(Boolean))];
-        progress.workTypes = [...new Set(dailyEntries.map(e => e.workType).filter(Boolean))];
+        progress.topicsCovered = [...new Set(dailyEntries.map(e => e.topic))];
+        progress.workTypes = [...new Set(dailyEntries.map(e => e.workType))];
         progress.goalAchieved = progress.totalStudyTime >= progress.dailyGoal;
 
         await progress.save();
