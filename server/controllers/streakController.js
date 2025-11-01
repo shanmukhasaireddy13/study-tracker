@@ -95,27 +95,6 @@ export const updateStreak = async (req, res) => {
     }
 };
 
-// Helper to update streak without Express res dependency (used internally)
-export const updateStreakForUser = async (userId, studyEntry) => {
-    // Reuse the same logic as the handler but without res
-    const dateStr = getIndianDateString();
-    const streak = await streakModel.findOne({ user: userId });
-    if (!streak) {
-        await calculateStreak(userId);
-    } else {
-        const existingCalendarEntry = streak.studyCalendar.find(entry => 
-            getIndianDateString(entry.date) === dateStr
-        );
-        if (!existingCalendarEntry) {
-            await calculateStreak(userId);
-        }
-    }
-
-    await updateStudyCalendar(userId, studyEntry);
-    await updateProgress(userId, studyEntry);
-    await checkAchievements(userId);
-};
-
 // Get revision recommendations
 export const getRevisionPlan = async (req, res) => {
     try {
@@ -399,7 +378,7 @@ const updateProgress = async (userId, studyEntry) => {
 
     if (existingProgress) {
         // Update existing progress
-        existingProgress.lastStudied = todayIST;
+        existingProgress.lastStudied = today;
         existingProgress.studyCount += 1;
         existingProgress.totalTimeSpent += studyEntry.totalTime || 0;
         existingProgress.confidence = studyEntry.confidence || existingProgress.confidence;
@@ -426,14 +405,14 @@ const updateProgress = async (userId, studyEntry) => {
             user: userId,
             subject: studyEntry.subject,
             lesson: studyEntry.lesson,
-            firstStudied: todayIST,
-            lastStudied: todayIST,
+            firstStudied: today,
+            lastStudied: today,
             studyCount: 1,
             masteryLevel: 1,
             confidence: studyEntry.confidence || 3,
             totalTimeSpent: studyEntry.totalTime || 0,
             revisionHistory: [revisionEntry],
-            nextReviewDate: new Date(todayIST.getTime() + 24 * 60 * 60 * 1000) // Next day
+            nextReviewDate: new Date(today.getTime() + 24 * 60 * 60 * 1000) // Next day
         });
     }
 };
